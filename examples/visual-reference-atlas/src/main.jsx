@@ -104,7 +104,8 @@ function Atlas(){
         nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
         onNodeClick={(_,n)=>{setSelectedId(n.id);setMobilePanel('inspector');}}
         onPaneClick={()=>{setSelectedId(null);setMobilePanel('');}}
-        fitView fitViewOptions={{padding:0.17}} minZoom={0.22} maxZoom={2.5}
+        fitView fitViewOptions={{padding:0.17,minZoom:0.12}} minZoom={0.12} maxZoom={2.5}
+        onInit={instance=>{window.setTimeout(()=>instance.fitView({padding:0.18,minZoom:0.12,maxZoom:1}),400);}}
         defaultEdgeOptions={{style:{stroke:'#586b66',strokeWidth:1.4}}}
         colorMode="dark" proOptions={{hideAttribution:false}}>
         <Background variant={BackgroundVariant.Dots} color="#27332d" gap={22} size={1}/>

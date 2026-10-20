@@ -104,14 +104,21 @@ jobs:
         run: |
           set +e
           mkdir -p evidence/frames
-          VIDEO="$(find evidence -maxdepth 1 -type f -name 'original.*' -print -quit)"
+          # GitHub runners need ffmpeg available before sampling the video stream.
+          if ! command -v ffmpeg >/dev/null; then
+            timeout 80 sudo apt-get update -qq >/dev/null 2>&1 || true
+            timeout 80 sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+          fi
+          VIDEO="$(find evidence -maxdepth 1 -type f -name 'original*.mp4' -print -quit)"
           if [ -n "$VIDEO" ] && command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
             ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$VIDEO" > evidence/video-duration.txt 2>&1
             DURATION="$(cat evidence/video-duration.txt)"
             INTERVAL="$(python3 -c 'import sys; print(max(1,float(sys.argv[1])/12))' "$DURATION" 2>/dev/null)"
             ffmpeg -nostdin -v error -i "$VIDEO" -vf "fps=1/$INTERVAL,scale=640:-1" -frames:v 12 -q:v 5 evidence/frames/frame-%03d.jpg > evidence/frames-error.log 2>&1
           fi
-          rm -f evidence/original.mp4 evidence/original.webm evidence/original.mkv evidence/original.mov
+          # yt-dlp can save separate original.fdash-*.mp4/.m4a streams. Never upload them.
+          find evidence -maxdepth 1 -type f -name 'original.*' -delete
+          find evidence -maxdepth 1 -type f -name 'original*' -delete
           exit 0
 
       - name: Print conservative evidence receipt

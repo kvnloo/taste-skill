@@ -33,7 +33,8 @@ function Atlas(){
   const [message,setMessage]=useState('');
   const [mobilePanel,setMobilePanel]=useState('');
   const importInput=useRef(null);
-  const {fitView}=useReactFlow();
+  const {fitView,setViewport}=useReactFlow();
+  const isMobile=window.matchMedia('(max-width:800px)').matches;
   const selected=graph.nodes.find(n=>n.id===selectedId);
   const changeGraph=useCallback((updater)=>setGraph(old=>{
     const next=typeof updater==='function'?updater(old):updater;
@@ -92,7 +93,7 @@ function Atlas(){
     <main className="workbench">
       <header className="toolbar"><div className="toolbar-title"><div className="eyebrow">TOOL 01 <span className="divider-dot">·</span> VISUAL INTELLIGENCE</div><h1>Reference Atlas <sup>beta</sup></h1><p>Map why visuals work, not just what they look like.</p></div>
         <div className="toolbar-actions"><button className="button subtle mobile-only" onClick={()=>setMobilePanel(mobilePanel==='library'?'':'library')}>Index</button>
-          <button className="button subtle" onClick={()=>fitView({padding:0.18,duration:350})}>Fit view</button>
+          <button className="button subtle" onClick={()=>isMobile?setViewport({x:25,y:130,zoom:0.29},{duration:350}):fitView({padding:0.18,duration:350})}>Fit view</button>
           <button className="button primary" onClick={addReference}>+ Reference</button>
           <button className="button subtle mobile-only" onClick={()=>setMobilePanel(mobilePanel==='inspector'?'':'inspector')}>Details</button>
         </div>
@@ -104,8 +105,9 @@ function Atlas(){
         nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
         onNodeClick={(_,n)=>{setSelectedId(n.id);setMobilePanel('inspector');}}
         onPaneClick={()=>{setSelectedId(null);setMobilePanel('');}}
-        fitView fitViewOptions={{padding:0.17,minZoom:0.12}} minZoom={0.12} maxZoom={2.5}
-        onInit={instance=>{window.setTimeout(()=>instance.fitView({padding:0.18,minZoom:0.12,maxZoom:1}),400);}}
+        fitView={!isMobile} defaultViewport={isMobile?{x:25,y:130,zoom:0.29}:undefined}
+        fitViewOptions={{padding:0.17,minZoom:0.12}} minZoom={0.12} maxZoom={2.5}
+        onInit={instance=>{if(!isMobile)window.setTimeout(()=>instance.fitView({padding:0.18,minZoom:0.12,maxZoom:1}),400);}}
         defaultEdgeOptions={{style:{stroke:'#586b66',strokeWidth:1.4}}}
         colorMode="dark" proOptions={{hideAttribution:false}}>
         <Background variant={BackgroundVariant.Dots} color="#27332d" gap={22} size={1}/>

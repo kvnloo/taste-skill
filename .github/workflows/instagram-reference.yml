@@ -1,0 +1,141 @@
+name: Inspect Instagram design reference (Agent Reach first)
+
+on:
+  push:
+    branches:
+      - "research/instagram-*"
+    paths:
+      - "research/references/instagram-request.json"
+      - ".github/workflows/instagram-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate one public Instagram reel URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json, os, re
+          from urllib.parse import urlsplit
+          request = json.load(open("research/references/instagram-request.json", encoding="utf8"))
+          p = urlsplit(request["post_url"])
+          if p.scheme != "https" or p.hostname not in ("instagram.com", "www.instagram.com") or p.port or p.username or p.password:
+              raise SystemExit("Only an HTTPS Instagram reel is allowed")
+          m = re.fullmatch(r"/reel/([A-Za-z0-9_-]{5,20})/?", p.path)
+          if not m:
+              raise SystemExit("URL must identify one exact reel shortcode")
+          url = "https://www.instagram.com/reel/" + m.group(1) + "/"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf8") as f:
+              f.write("SOURCE_URL=" + url + "\n")
+          with open("evidence/source.json", "w", encoding="utf8") as f:
+              json.dump({"source_url":url,"video_reviewed":False,"license_verified":False,
+                         "community_verified":False,"status":"UNVERIFIED"},f,indent=2)
+          print("Validated canonical public reel URL: " + url)
+          PY
+
+      - name: Check Agent Reach Instagram capability without credentials
+        shell: bash
+        run: |
+          set +e
+          export PATH="$HOME/.local/bin:$PATH"
+          timeout 145 pipx install https://github.com/Panniantong/Agent-Reach/archive/main.zip > evidence/agent-reach-install.log 2>&1
+          printf '%s\n' "$?" > evidence/agent-reach-install.exit
+          if command -v agent-reach >/dev/null; then
+            timeout 100 agent-reach install --env=auto --channels=instagram >> evidence/agent-reach-install.log 2>&1
+            timeout 40 agent-reach doctor --json > evidence/agent-reach-doctor.json 2>&1
+          else
+            echo "Agent Reach binary unavailable" > evidence/agent-reach-doctor.json
+          fi
+          echo "Instagram via Agent Reach/OpenCLI requires an existing user-controlled logged-in Chrome session; CI has none. No private sessions or cookies used." > evidence/agent-reach-session.txt
+          exit 0
+
+      - name: Try public metadata and video with yt-dlp
+        shell: bash
+        run: |
+          set +e
+          export PATH="$HOME/.local/bin:$PATH"
+          timeout 120 pipx install yt-dlp > evidence/ytdlp-install.log 2>&1
+          if ! command -v yt-dlp >/dev/null; then
+            echo "yt-dlp unavailable" > evidence/ytdlp-error.txt
+            exit 0
+          fi
+          timeout 85 yt-dlp --no-playlist --dump-single-json "$SOURCE_URL" > /tmp/reel-info.json 2> evidence/ytdlp-error.txt
+          echo "$?" > evidence/ytdlp-metadata.exit
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("/tmp/reel-info.json")
+          if p.exists() and p.stat().st_size:
+              try:
+                  raw = json.loads(p.read_text())
+                  keys = ("id","display_id","title","description","uploader","uploader_id","channel",
+                          "timestamp","upload_date","duration","webpage_url","availability","license")
+                  result = {k:raw[k] for k in keys if k in raw}
+                  pathlib.Path("evidence/metadata.json").write_text(json.dumps(result,indent=2,ensure_ascii=False))
+              except Exception as e:
+                  pathlib.Path("evidence/metadata-error.txt").write_text(str(e))
+          p.unlink(missing_ok=True)
+          PY
+          timeout 135 yt-dlp --no-playlist --max-filesize 38M --no-progress --merge-output-format mp4 -f 'bv*+ba/b' -o 'evidence/original.%(ext)s' "$SOURCE_URL" > evidence/ytdlp-download.log 2>&1
+          echo "$?" > evidence/ytdlp-download.exit
+          exit 0
+
+      - name: Try unauthenticated public page and reader
+        shell: bash
+        run: |
+          set +e
+          timeout 30 curl --location --silent --show-error --max-time 25 --max-filesize 600000 -w '\nHTTP_CODE:%{http_code}\n' "$SOURCE_URL" > evidence/public-page.html 2> evidence/public-page-error.txt
+          timeout 35 curl --location --silent --show-error --max-time 30 --max-filesize 600000 -w '\nHTTP_CODE:%{http_code}\n' "https://r.jina.ai/$SOURCE_URL" > evidence/jina.txt 2> evidence/jina-error.txt
+          exit 0
+
+      - name: Make bounded visual evidence; discard full video
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p evidence/frames
+          VIDEO="$(find evidence -maxdepth 1 -type f -name 'original.*' -print -quit)"
+          if [ -n "$VIDEO" ] && command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
+            ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$VIDEO" > evidence/video-duration.txt 2>&1
+            DURATION="$(cat evidence/video-duration.txt)"
+            INTERVAL="$(python3 -c 'import sys; print(max(1,float(sys.argv[1])/12))' "$DURATION" 2>/dev/null)"
+            ffmpeg -nostdin -v error -i "$VIDEO" -vf "fps=1/$INTERVAL,scale=640:-1" -frames:v 12 -q:v 5 evidence/frames/frame-%03d.jpg > evidence/frames-error.log 2>&1
+          fi
+          rm -f evidence/original.mp4 evidence/original.webm evidence/original.mkv evidence/original.mov
+          exit 0
+
+      - name: Print conservative evidence receipt
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("evidence")
+          source=root/"source.json"
+          lines=["# Instagram reference: retrieval receipt (not content analysis)",
+                 "Original: https://www.instagram.com/reel/Dee4c-QgT1g/",
+                 "Agent Reach doctor output: " + str((root/"agent-reach-doctor.json").exists()),
+                 "yt-dlp metadata: " + str((root/"metadata.json").exists()),
+                 "Sample frames: " + str(len(list((root/"frames").glob("frame-*.jpg")))),
+                 "NOT VERIFIED: video contents, project identity, license, OSS community.",
+                 "Inspect frames and metadata before making any claims. No cookies or original video retained."]
+          (root/"SUMMARY.md").write_text("\n".join(lines)+"\n")
+          print("\n".join(lines))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instagram-reference-evidence
+          path: evidence/
+          retention-days: 1

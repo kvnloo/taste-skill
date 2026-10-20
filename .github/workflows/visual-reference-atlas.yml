@@ -33,3 +33,35 @@ jobs:
         run: npm test
       - name: Compile responsive React Flow lab
         run: npm run build
+      - name: Headless Chrome render and DOM smoke check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run dev -- --host 127.0.0.1 > /tmp/taste-atlas-vite.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$CHROME"
+          "$CHROME" --headless --no-sandbox --disable-dev-shm-usage --disable-gpu --hide-scrollbars --virtual-time-budget=10000 \
+            --window-size=1440,940 --screenshot=atlas-desktop.png http://127.0.0.1:5173/ > /tmp/chrome.log 2>&1
+          "$CHROME" --headless --no-sandbox --disable-dev-shm-usage --disable-gpu --virtual-time-budget=10000 \
+            --window-size=1440,940 --dump-dom http://127.0.0.1:5173/ > atlas-dom.txt 2>> /tmp/chrome.log
+          grep -q 'Reference Atlas' atlas-dom.txt
+          grep -q 'Editorial signal' atlas-dom.txt
+          "$CHROME" --headless --no-sandbox --disable-dev-shm-usage --disable-gpu --hide-scrollbars --virtual-time-budget=10000 \
+            --window-size=390,800 --screenshot=atlas-mobile.png http://127.0.0.1:5173/ >> /tmp/chrome.log 2>&1
+          test -s atlas-desktop.png
+          test -s atlas-mobile.png
+      - name: Upload short-lived visual smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlas-visual-qa
+          path: |
+            examples/visual-reference-atlas/atlas-desktop.png
+            examples/visual-reference-atlas/atlas-mobile.png
+          retention-days: 2

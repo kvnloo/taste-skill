@@ -1,0 +1,35 @@
+name: Visual reference atlas smoke tests
+on:
+  push:
+    branches: ["feature/visual-reference-atlas"]
+    paths:
+      - "examples/visual-reference-atlas/**"
+      - ".github/workflows/visual-reference-atlas.yml"
+  pull_request:
+    paths:
+      - "examples/visual-reference-atlas/**"
+      - ".github/workflows/visual-reference-atlas.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    defaults:
+      run:
+        working-directory: examples/visual-reference-atlas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependency ranges
+        run: npm install --no-audit --no-fund
+      - name: Validate graph importer and source URL safety
+        run: npm test
+      - name: Compile responsive React Flow lab
+        run: npm run build

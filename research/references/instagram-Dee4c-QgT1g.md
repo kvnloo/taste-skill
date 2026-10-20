@@ -1,11 +1,23 @@
-# Instagram design reference: Dee4c-QgT1g
+# Verified source study: Jason Murray's Iris
 
-- **Original source:** https://www.instagram.com/reel/Dee4c-QgT1g/
-- **Requested check:** identify the creator and what the reel shows; verify whether the depicted project is public, licensed OSS, and has an active welcoming contributor community.
-- **Status (2026-10-20):** **SOURCE UNVERIFIED**. Direct Instagram fetch returned HTTP 429 and the Reel's author, caption, content, and licensing have **not** been inspected.
-- **Evidence:** run the one-off Instagram investigation workflow on this branch and review its diagnostic logs + any real video frame samples. Do not treat the existence of the URL, metadata, or thumbnail as proof of visual behavior.
-- **Attribution:** retain the original author and project link once established; never copy copyrighted assets or claim the underlying project is open source without a repository/license.
-- **OSS decision gate:** validate repo identity, license, public access, recent commits, issue/review responsiveness, open contribution guidelines, and existing similar work.
-- **Fallback:** only if no suitable public/community OSS implementation exists, create a minimal independent prototype within this fork and validate behavior with a visual reference, tests, and provenance. Do not send an upstream PR based on guesswork.
+- **Original reel / creator:** [Jason Murray (@jason_swet), October 14, 2026](https://www.instagram.com/reel/Dee4c-QgT1g/)
+- **Observed content:** a dynamic, visually linked taxonomy of art direction: graphic examples connected through techniques, intended meanings, and compositional decisions; nodes and visual references in an interactive spatial interface.
+- **Reel access:** **PUBLIC** as of 2026-10-20; direct Instagram scraping returned 429 but unauthenticated **yt-dlp retrieved original caption, metadata and video**. Inspected 13 sampled frames locally. Not retrieved directly by Agent Reach.
+- **Agent Reach:** `agent-reach doctor --json` reported Instagram `status: off`. The OpenCLI Instagram backend needs an existing, user-controlled, logged-in desktop Chrome session; the remote CI had none.
+- **Named product:** [Iris / Modern Art Direction](https://visuals.modernartdirection.com/). Its publicly accessible site describes invite-only/course-linked beta access, rather than a public implementation.
+- **OSS licensing:** **NOT VERIFIED / NO LICENSE OR SOURCE FOUND** for Iris itself. Do not treat a publicly viewable site as OSS.
+- **Creator's statement:** beta currently available to bootcamp students; public release uncertain. Avoid copying its protected assets, internal taxonomy, descriptions, or original video.
+- **Suitable OSS building block:** [React Flow](https://github.com/xyflow/xyflow), MIT, ~38,724 stars, active Oct 2026, healthy PR activity.
+- **Original downstream alternative:** [Visual Reference Atlas in Taste Lab](https://github.com/kvnloo/taste-skill/pull/1). Uses original categories, CSS-generated demo specimens, attributed creator link, and no proprietary visuals.
+- **CI evidence:** [Public investigation run](https://github.com/kvnloo/taste-skill/actions/runs/39446860755), original `metadata.json` and doctor output, short-lived ephemeral artifact. Initial run did not extract frames automatically because ffmpeg was absent; manual inspection of the recovered video was performed separately. **Do not claim Agent Reach retrieved this reel or that CI itself inspected visuals.**
 
-This record intentionally excludes unverified interpretations of the reel.
+## Follow-up quality gates
+- [x] Identify original creator, project name and caption
+- [x] Distinguish public Reel from private/beta product
+- [x] Find maintained MIT OSS foundation
+- [x] Build credited independent prototype in the fork
+- [x] Pass unit tests and production build (2026-10-20)
+- [ ] In-browser accessibility/visual QA; benchmark user workflow
+- [ ] Verify license/provenance of all future imported image assets
+
+Do not publish third-party video frames or session credentials.

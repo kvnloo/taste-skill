@@ -82,6 +82,8 @@ tool you can call, or nothing. Do not plan around pictures you do not have. Noth
 rarely nothing at all: the subject's city, street, materials and history are in open archives and
 museums, free to use with a credit (step 6, `scripts/assets.mjs`).
 
+**If `TASTE_DATA_DIR` is set, read the owner's taste before anything else** (`taste-lab/README.md`): `profile/TASTE.md`, then `taxonomy/atlas.json` and `taxonomy/motion.yaml` if they exist. Their recorded references outrank anything the draw deals. Use them to choose the direction in step 3 and the motion in step 9, and name the references you used in the report. Never copy anything from that directory into a public repository.
+
 If the request is vague, decide and state your reading in one line instead of asking. Ask only when a
 missing fact blocks the work (for example, no product name).
 
@@ -508,6 +510,7 @@ open collections could not be searched.
 
 | File | Read it when |
 | --- | --- |
+| `$TASTE_DATA_DIR` (optional, private) | Step 1, always when set: the owner's taste profile, atlas and named motion. See `taste-lab/README.md`. |
 | `references/app-screens.md` | Any dashboard, admin, settings or other app screen: its own run, rules, tokens and checks. |
 | `references/copy.md` | Writing the argument and the copy deck (steps 2 and 5). The two-line arithmetic. |
 | `references/type.md` | Setting type: scales, tracking, measure, loading fonts, pairing. |

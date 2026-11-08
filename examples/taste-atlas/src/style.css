@@ -1,0 +1,48 @@
+:root { --bg: #f4f2ed; --ink: #1b1a17; --mute: #8a857a; --panel: rgba(250, 249, 246, .92); --line: #dedad1; }
+[data-theme="dark"] { --bg: #0f1314; --ink: #ece8df; --mute: #8f8a80; --panel: rgba(22, 27, 29, .92); --line: #2a3033; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 Inter, system-ui, sans-serif; overflow: hidden; transition: background .4s; }
+#atlas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; }
+.label { font-family: Inter, sans-serif; font-weight: 500; pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.label.l1 { font-family: "Archivo Black", sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+.label.l3 { font-family: "IBM Plex Mono", monospace; }
+.node { cursor: pointer; transition: opacity .25s; }
+.chrome { position: fixed; top: 18px; left: 18px; right: 18px; display: flex; gap: 12px; align-items: center; pointer-events: none; }
+.chrome > * { pointer-events: auto; }
+.brand { font: 600 15px Inter; display: flex; gap: 8px; align-items: center; letter-spacing: -.01em; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: conic-gradient(#d6453d, #c27c0e, #1f8a5b, #2f6fd6, #7b3fa0, #c2457a, #d6453d); }
+.search { margin-left: auto; position: relative; }
+.search input { width: 240px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 13px "IBM Plex Mono", monospace; outline: none; backdrop-filter: blur(10px); }
+#hits { position: absolute; top: 40px; right: 0; width: 280px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: none; }
+#hits.on { display: block; }
+#hits div { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+#hits div:hover, #hits div.sel { background: var(--line); }
+#hits small { color: var(--mute); margin-left: 6px; font: 11px "IBM Plex Mono", monospace; }
+#theme { border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+.card { position: fixed; left: 18px; top: 72px; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0, 0, 0, .08); transition: opacity .2s; }
+.card .row { display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); opacity: .45; }
+.card .row:last-child { border-bottom: 0; }
+.card .row.on { opacity: 1; }
+.card .ic { display: flex; align-items: flex-start; padding-top: 2px; }
+.card .k { font: 10px "IBM Plex Mono", monospace; letter-spacing: .12em; color: var(--mute); }
+.card .k b { font-weight: 500; margin-right: 4px; }
+.card .v { font: 600 16px Inter; letter-spacing: -.01em; margin-top: 2px; }
+.card .v.mono { font: 500 14px "IBM Plex Mono", monospace; }
+.card .v em { font: italic 400 20px "Instrument Serif", serif; }
+.card .mech { font-size: 12px; color: var(--mute); margin-top: 3px; }
+.card .preview { margin-top: 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.card .preview svg { display: block; width: 100%; aspect-ratio: 4 / 5; }
+.legend { position: fixed; left: 18px; bottom: 18px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 60vw; }
+.legend button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px 6px 8px; font: 500 12px Inter; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.hint { position: fixed; right: 18px; bottom: 18px; color: var(--mute); font: 11px "IBM Plex Mono", monospace; }
+/* Film mode: chrome hidden except card, larger type. */
+body.film .chrome, body.film .legend, body.film .hint { display: none; }
+body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-origin: bottom left; }
+@media (max-width: 700px) { .card { width: calc(100% - 36px); top: auto; bottom: 60px; } .search input { width: 150px; } .hint { display: none; } }
+.card .intro .eyebrow { font: 10px "IBM Plex Mono", monospace; letter-spacing: .16em; color: var(--mute); }
+.card .intro h1 { font: 600 26px/1.05 Inter; letter-spacing: -.03em; margin: 8px 0 8px; }
+.card .intro h1 em { font: italic 400 32px "Instrument Serif", serif; letter-spacing: 0; }
+.card .intro p { margin: 0 0 12px; color: var(--mute); font-size: 13px; }
+.card .intro .lv { font: 11px "IBM Plex Mono", monospace; letter-spacing: .12em; padding: 6px 0; border-top: 1px dashed var(--line); }
+.card .intro .lv b { font-weight: 500; margin-right: 10px; color: var(--mute); }

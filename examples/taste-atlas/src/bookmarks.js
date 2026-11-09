@@ -68,14 +68,16 @@ export async function mountBookmarks(A, { go }) {
       for (const s of strands) { const on = lit && (lit.has(s.p) || lit.has(s.q)); s.path.setAttribute("stroke-opacity", lit ? (on ? 0.7 : 0.02) : 0.16); s.path.dataset.w = Math.min(1 + s.c / 3, 5) * (on ? 1.6 : 1); }
     }
     if (key === camKey) return; camKey = key;
-    const ox = c.cx ?? innerWidth / 2, oy = c.cy ?? innerHeight / 2, big = T * c.s >= 9;
+    const ox = c.cx ?? innerWidth / 2, oy = c.cy ?? innerHeight / 2, big = T * c.s >= 11;
+    let budget = 24; // pictures started per frame, so a zoom never queues hundreds of requests at once
     for (const s of strands) s.path.setAttribute("stroke-width", s.path.dataset.w / Math.max(c.s, 0.15));
     if (!big) return;
     for (const t of tiles) {
       if (t.loaded) continue;
+      if (budget <= 0) { camKey = ""; break; }
       const sx = ox + (t.x - c.x) * c.s, sy = oy + (t.y - c.y) * c.s;
       if (sx < -80 || sy < -80 || sx > innerWidth + 80 || sy > innerHeight + 80) continue;
-      t.loaded = true;
+      t.loaded = true; budget--;
       const im = document.createElementNS(NS, "image"); im.setAttribute("href", "./data/" + t.b.thumb); im.setAttribute("width", T); im.setAttribute("height", T);
       im.setAttribute("preserveAspectRatio", "xMidYMid slice"); im.setAttribute("clip-path", "inset(0 round 4px)"); t.g.insertBefore(im, t.g.lastChild);
     }

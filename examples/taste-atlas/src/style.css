@@ -86,3 +86,4 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
   .shelf .chips { flex: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .shelf .chips button { padding: 6px 12px; white-space: nowrap; }
   .shelf .grid { grid-template-columns: repeat(2, 1fr); }
 }
+.bm-tile { cursor: pointer; } .bm-tile rect { stroke: var(--bg); stroke-width: 1; } .bm-tile:hover rect { stroke: var(--ink); stroke-width: 3; }

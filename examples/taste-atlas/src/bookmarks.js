@@ -25,6 +25,63 @@ export async function mountBookmarks(A, { go }) {
     g.appendChild(b);
   }
 
+  // Constellation: every post with an image becomes a tile in a wedge behind its technique's specimens,
+  // best fit nearest the centre. Zoomed out the tiles are specks in the image's average colour; they load
+  // the picture once they are big enough on screen. Strands link techniques that posts share (2nd-best label).
+  const T = 44, G = 6, R0 = 1840, tiles = [], ext = new Map();
+  const slot = Math.min(...A.graph.leaves.slice(1).map((l, i) => Math.abs(l.a - A.graph.leaves[i].a)));
+  const tileLayer = document.createElementNS(NS, "g"), strandLayer = document.createElementNS(NS, "g");
+  strandLayer.setAttribute("fill", "none"); A.world.prepend(strandLayer); A.world.appendChild(tileLayer);
+  for (const [id, all] of byTech) {
+    const n = A.graph.byId.get(id), list = all.filter((b) => b.thumb); if (!n || !list.length) continue;
+    const a0 = n.children[0].a - slot / 2, span = n.children.at(-1).a - n.children[0].a + slot;
+    let r = R0, k = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    while (k < list.length) {
+      const per = Math.max(1, Math.floor((span * r) / (T + G))), row = list.slice(k, k + per);
+      row.forEach((b, j) => {
+        const a = a0 + (span * (j + 0.5)) / per, x = Math.cos(a) * r, y = Math.sin(a) * r;
+        const g = document.createElementNS(NS, "g"); g.setAttribute("class", "bm-tile"); g.dataset.tech = id; g.dataset.url = b.url;
+        g.setAttribute("transform", `translate(${x - T / 2} ${y - T / 2})`);
+        g.innerHTML = `<rect width="${T}" height="${T}" rx="4" fill="${b.rgb ?? opById[n.op].color}"/><title>${esc(b.text)}</title>`;
+        tileLayer.appendChild(g); tiles.push({ g, b, x, y, id, loaded: false });
+        x0 = Math.min(x0, x - T); y0 = Math.min(y0, y - T); x1 = Math.max(x1, x + T); y1 = Math.max(y1, y + T);
+      });
+      k += per; r += T + G;
+    }
+    ext.set(id, [x0, y0, x1, y1]);
+  }
+  A.extraBounds = (ids) => [...ids].map((k) => ext.get(k)).filter(Boolean);
+  const pairs = new Map();
+  for (const b of items) if (b.also && b.also !== b.technique) { const k = [b.technique, b.also].sort().join("|"); pairs.set(k, (pairs.get(k) ?? 0) + 1); }
+  const strands = [...pairs].filter(([, c]) => c >= 3).map(([k, c]) => {
+    const [p, q] = k.split("|").map((x) => A.graph.byId.get(x)), path = document.createElementNS(NS, "path");
+    path.setAttribute("d", `M${p.x} ${p.y} Q${(p.x + q.x) * 0.25} ${(p.y + q.y) * 0.25} ${q.x} ${q.y}`);
+    path.setAttribute("stroke", opById[p.op].color); path.setAttribute("stroke-linecap", "round"); strandLayer.appendChild(path);
+    return { path, p: p.id, q: q.id, c };
+  });
+  let camKey = "", litKey = null;
+  function paint() {
+    const c = A.view.cam, f = A.view.focus, key = `${c.x | 0},${c.y | 0},${c.s.toFixed(3)},${innerWidth}`;
+    if (f !== litKey) {
+      litKey = f; const lit = f === "root" ? null : new Set(under(f).map((b) => b.technique));
+      for (const t of tiles) t.g.setAttribute("opacity", !lit || lit.has(t.id) ? 1 : 0.06);
+      for (const s of strands) { const on = lit && (lit.has(s.p) || lit.has(s.q)); s.path.setAttribute("stroke-opacity", lit ? (on ? 0.7 : 0.02) : 0.16); s.path.dataset.w = Math.min(1 + s.c / 3, 5) * (on ? 1.6 : 1); }
+    }
+    if (key === camKey) return; camKey = key;
+    const ox = c.cx ?? innerWidth / 2, oy = c.cy ?? innerHeight / 2, big = T * c.s >= 9;
+    for (const s of strands) s.path.setAttribute("stroke-width", s.path.dataset.w / Math.max(c.s, 0.15));
+    if (!big) return;
+    for (const t of tiles) {
+      if (t.loaded) continue;
+      const sx = ox + (t.x - c.x) * c.s, sy = oy + (t.y - c.y) * c.s;
+      if (sx < -80 || sy < -80 || sx > innerWidth + 80 || sy > innerHeight + 80) continue;
+      t.loaded = true;
+      const im = document.createElementNS(NS, "image"); im.setAttribute("href", "./data/" + t.b.thumb); im.setAttribute("width", T); im.setAttribute("height", T);
+      im.setAttribute("preserveAspectRatio", "xMidYMid slice"); im.setAttribute("clip-path", "inset(0 round 4px)"); t.g.insertBefore(im, t.g.lastChild);
+    }
+  }
+  A.tileAt = (el) => { const g = el.closest?.(".bm-tile"); return g && { tech: g.dataset.tech, url: g.dataset.url }; };
+
   // Shelf.
   const shelf = document.createElement("aside"); shelf.className = "shelf"; document.body.appendChild(shelf);
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
@@ -60,7 +117,7 @@ export async function mountBookmarks(A, { go }) {
     if (e.target.closest(".more")) { shown += 60; draw(); }
   });
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
-  (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } requestAnimationFrame(poll); })();
+  (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } paint(); requestAnimationFrame(poll); })();
   draw(); go(A.view.focus, 600);
   return { count: items.length, total: data.count };
 }

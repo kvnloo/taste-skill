@@ -64,6 +64,8 @@ svg.addEventListener("pointermove", (e) => {
 svg.addEventListener("pointerup", (e) => {
   const wasDrag = drag?.moved; drag = null;
   if (wasDrag || swallowTap) return;
+  const tile = A.tileAt?.(e.target);
+  if (tile) { if (A.view.focus === tile.tech) open(tile.url, "_blank", "noopener"); else go(tile.tech); return; }
   const id = e.target.closest?.(".node")?.dataset.id;
   if (id) go(id === A.view.focus ? (A.graph.byId.get(id).parent?.id ?? "root") : id);
   else go("root");

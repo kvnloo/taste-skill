@@ -105,6 +105,7 @@ export function createAtlas({ svg, card, width, height }) {
     const ids = n.level === 4 ? subtree(n.parent) : subtree(n);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const k of ids) { const m = g.byId.get(k); const r = m.level === 4 ? 60 : 50; x0 = Math.min(x0, m.x - r); y0 = Math.min(y0, m.y - r); x1 = Math.max(x1, m.x + r); y1 = Math.max(y1, m.y + r); }
+    for (const [a, b, c, d] of view.extraBounds?.(ids) ?? []) { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); }
     if (n.level >= 2) { const p = n.level === 4 ? n.parent : n; x0 = Math.min(x0, p.x - 60); y0 = Math.min(y0, p.y - 60); x1 = Math.max(x1, p.x + 60); y1 = Math.max(y1, p.y + 60); }
     const R = region ?? { x: 0, y: 0, w: width(), h: height() };
     const s = Math.min((R.w * pad) / (x1 - x0), (R.h * pad) / (y1 - y0), 2.2);
@@ -192,7 +193,9 @@ export function createAtlas({ svg, card, width, height }) {
     card.style.transform = `translateY(${(1 - view.cardIn) * -12}px)`;
   }
 
-  return { graph: g, view, render, fit, parts };
+  const api = { graph: g, view, render, fit, parts, world };
+  Object.defineProperty(api, "extraBounds", { set: (f) => (view.extraBounds = f) });
+  return api;
 }
 
 export const stats = () => ({ techniques: TECHNIQUES.length, executions: TECHNIQUES.reduce((a, t) => a + t.executions.length, 0), domains: Object.keys(DOMAINS).length });

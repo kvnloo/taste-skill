@@ -66,8 +66,42 @@ const T = [
   ["evoke", "time", "alive-canvas", "Alive canvas", "alive", "Calm chrome around something that moves on its own.", [["Orb breath", 1], ["Particle drift", 2], ["Growth sim", 3]]],
 ];
 
+// How each technique lands on a web page or UI component: the recipe an agent builds from.
+export const UI = {
+  "color-isolation": "Neutral palette (2-3 greys) plus one saturated accent used only on the primary action or key number.",
+  "scale-jump": "One element 4-8x the body size (hero numeral, price, date) beside small captions; skip the middle sizes.",
+  "texture-break": "Flat surfaces everywhere except one card with grain, noise or a pattern fill that marks it special.",
+  "semantic-contrast": "Two panels side by side with opposed states (before/after, free/pro, day/night) and a shared axis.",
+  "isolation": "One element alone in generous whitespace (>= 40% of the viewport) with nothing competing.",
+  "complementary-pairing": "Two complementary hues meet at a hard edge (button on panel, badge on banner); keep both saturated.",
+  "visual-metaphor": "Represent the abstract metric as a familiar object (progress as a filling glass, uptime as a pulse).",
+  "form-substitution": "A known silhouette (logo, device, letter) used as a mask, filled with photos, data or a pattern.",
+  "synecdoche": "Crop the product so only a recognisable part shows (a corner of the UI, one key, a hand) and let the edge bleed off.",
+  "closure": "Imply shapes with gaps: dashed outlines, partial rings, icons drawn from a few strokes.",
+  "genre-quotation": "Borrow one movement's grammar wholesale (Swiss grid, Bauhaus primaries, Y2K chrome, terminal green).",
+  "instrument-language": "Mono labels, tick marks, corner brackets, coordinates and units: the UI reads as a precise instrument.",
+  "proximity": "Group by spacing alone: tight gaps inside a group, at least 2x that gap between groups, no borders needed.",
+  "similarity": "Same colour or shape marks the same kind of thing across the page (all live items green, all links one style).",
+  "common-region": "Cards, tinted panels or outlined boxes bind related controls; one region per idea.",
+  "continuity": "Align steps on one line or curve (timeline, stepper, connector line) so the eye travels through them.",
+  "shared-grid": "Every block snaps to one 12-column grid with shared edges and a fixed gutter; unrelated content reads as a system.",
+  "leading-lines": "Diagonals, arrows or converging gradients that point at the call to action.",
+  "reading-path": "Lay out on the Z (logo, nav, headline, CTA) or F for text-heavy pages; put the action at the path's end.",
+  "figure-ground": "Strong contrast between subject and field; reverse it once (light card on dark section) to mark focus.",
+  "value-hierarchy": "Darkest and largest first: headline at full ink, body at 70%, meta at 45%; one level per job.",
+  "ease-settle": "Enter with a fast-out, slow-in curve (cubic-bezier(.2,.8,.2,1), 300-500ms) and a tiny overshoot or settle.",
+  "stagger": "Reveal list items with 30-60ms delays between them so the list arrives as a wave.",
+  "morph": "Animate shared elements between states (FLIP or View Transitions) instead of cutting.",
+  "parallax-depth": "Two to four layers scroll at different rates (0.2x to 1x); keep it subtle and respect reduced motion.",
+  "ticker": "Numbers roll digit by digit (odometer) when values change; tabular numerals so width holds.",
+  "tactile-surface": "Material you can almost touch: soft shadows plus inner highlight, glass blur, chrome gradients, paper grain.",
+  "warm-neutrals": "Bone, clay, sage and ink palette (#f4f2ed, #c9b8a3, #9aa58c, #1b1a17) with low-contrast borders.",
+  "editorial-serif": "A large italic display serif for headlines over a quiet sans body; generous leading and line length ~60ch.",
+  "alive-canvas": "Quiet chrome around one live element (shader, generative canvas, looping video) that moves by itself.",
+};
+
 export const TECHNIQUES = T.map(([op, domain, id, name, family, mech, ex]) => ({
-  id, op, domain, name, family, mech,
+  id, op, domain, name, family, mech, ui: UI[id],
   executions: ex.map(([title, seed], i) => ({ id: `${id}--${i + 1}`, title, seed, family })),
 }));
 

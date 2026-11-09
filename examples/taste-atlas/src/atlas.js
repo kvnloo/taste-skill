@@ -161,7 +161,7 @@ export function createAtlas({ svg, card, width, height }) {
     const ox = cam.cx ?? W / 2, oy = cam.cy ?? H / 2;
     if (view.live && committed && keys.cam && camKey !== keys.cam) {
       const C = committed, k = cam.s / C.s, tx = ox - C.ox * k + (C.x - cam.x) * cam.s, ty = oy - C.oy * k + (C.y - cam.y) * cam.s;
-      const far = k < 0.85 || k > 1.3 || Math.abs(tx + (k - 1) * W / 2) > W * 0.15 || Math.abs(ty + (k - 1) * H / 2) > H * 0.15;
+      const far = k < 0.72 || k > 1.5 || Math.abs(tx + (k - 1) * W / 2) > W * 0.22 || Math.abs(ty + (k - 1) * H / 2) > H * 0.22;
       if (!far && camKey !== lastKey) { svg.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`; lastKey = camKey; return renderCard(f, view.t), void (force = false); }
     }
     lastKey = camKey;
@@ -236,7 +236,9 @@ export function createAtlas({ svg, card, width, height }) {
     }).join("");
     const preview = line[3] ? `<div class="preview"><svg viewBox="0 0 ${CARD.w} ${CARD.h}" preserveAspectRatio="xMidYMid slice">${specimen(line[3].family, line[3].seed, tq)}</svg></div>` : "";
     // Optional layers (bookmarks) append "recorded examples" under the lineage.
-    card.innerHTML = `<div class="rows">${rows}</div>${preview}${view.cardExtra?.(f) ?? ""}`;
+    // Hand the focused branch to an agent as a build brief (handled in main.js; see src/brief.js).
+    const act = `<div class="card-act"><button data-brief="site" title="Copy a site brief for an agent">Copy site brief</button><button data-brief="component" title="Copy a UI component brief for an agent">Component brief</button></div>`;
+    card.innerHTML = `<div class="rows">${rows}</div>${preview}${view.cardExtra?.(f) ?? ""}${act}`;
     fade();
   }
 

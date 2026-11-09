@@ -2,6 +2,7 @@
 import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
+import { brief, briefMarkdown } from "./brief.js";
 
 const svg = document.getElementById("atlas");
 const card = document.getElementById("card");
@@ -116,6 +117,17 @@ A.view.labelScale = phone() ? 0.8 : 1;
 A.view.cam = fitR("root");
 const start = location.hash.slice(1);
 if (A.graph.byId.has(start)) go(start, 1200);
-window.__atlas = { A, go };
+// Agent hand-off: the card's brief buttons copy markdown; window.__atlas.brief() returns the JSON.
+const makeBrief = (ids, target = "site") => brief(ids, { target, refsFor: (id) => (window.__atlas.bm?.byTech.get(id) ?? []).filter((b) => b.thumb) });
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { const t = Object.assign(document.createElement("textarea"), { value: text }); document.body.appendChild(t); t.select(); const ok = document.execCommand("copy"); t.remove(); return ok; }
+}
+card.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-brief]"); if (!b) return;
+  const ok = await copy(briefMarkdown(makeBrief([A.view.focus], b.dataset.brief)));
+  b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
+});
+window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
 mountBookmarks(A, { go }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks`; window.__atlas.bm = bm; });
 requestAnimationFrame(frame);

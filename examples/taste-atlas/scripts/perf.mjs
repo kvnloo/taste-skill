@@ -5,7 +5,11 @@ const require = createRequire(process.env.PW_FROM ?? "/mnt/zer0models/project-ar
 const { chromium } = require("playwright-core");
 const base = process.argv[2] ?? "http://127.0.0.1:8787";
 const budget = +(process.env.BUDGET_MS ?? 34);
-const b = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`, args: ["--enable-gpu-rasterization"] });
+// Real phones raster on the GPU; headless Chromium defaults to software raster, which inflates
+// paint-heavy frames. GPU=0 measures the software path instead.
+const GPU_ARGS = process.env.GPU === "0" ? ["--enable-gpu-rasterization"]
+  : ["--enable-gpu", "--ignore-gpu-blocklist", "--enable-gpu-rasterization", "--use-angle=vulkan", "--enable-features=Vulkan"];
+const b = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`, args: GPU_ARGS });
 
 async function run(name, ctx, throttle) {
   const p = await b.newPage(ctx), cdp = await p.context().newCDPSession(p);

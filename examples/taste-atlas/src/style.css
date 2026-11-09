@@ -113,3 +113,13 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 @media (max-width: 700px) { .card .examples { display: none; } }
 .swatch { display: none; } .lod .swatch { display: inline; } .lod .art { display: none; }
 #atlas { transform-origin: 0 0; will-change: transform; }
+/* Agent brief actions on the lineage card. */
+.card .card-act { display: flex; gap: 6px; margin-top: 12px; }
+.card .card-act button { flex: 1; font: 600 11px Inter, sans-serif; padding: 7px 8px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+.card .card-act button:first-child { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+/* Mosaic: the shelf grows into a full-screen gallery. */
+.shelf .wid { margin-left: auto; border: 1px solid var(--line); background: none; color: var(--ink); width: 26px; height: 26px; border-radius: 8px; cursor: pointer; flex: none; }
+.shelf.open.wide { left: 18px; width: auto; z-index: 20; }
+.shelf.wide .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.shelf.wide .grid a { padding-bottom: 100%; }
+@media (max-width: 700px) { .shelf .wid { order: 1; width: 36px; height: 36px; } .shelf.open.wide { left: 0; top: 0; height: auto; border-radius: 0; } .shelf.wide .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }

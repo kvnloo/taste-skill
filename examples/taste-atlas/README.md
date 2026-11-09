@@ -24,6 +24,24 @@ python3 -m http.server 8787   # then open http://127.0.0.1:8787/
 Click a node to focus its branch, click again or press Esc to step out, `/` to search, `t` for the
 theme. Deep links work: `/#color-isolation`, `/?theme=dark#instrument-language`.
 
+With a private `data/` folder (bookmarks classified by `products/taste` scripts, never committed) the
+atlas also draws every saved post around the ring, shows "N of your posts" on the card, a shelf with
+subject filters (`b`), a full-screen mosaic (`m`) and a post detail view.
+
+## Agents
+
+`scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from
+(`export`, `list`, `get`, `search`, `suggest`, `brief <ids> [--component] [--md]`). The same brief
+builder (`src/brief.js`) backs the card's "Copy site brief" / "Component brief" buttons and
+`window.__atlas.brief()`. The agent workflow is `skills/taste-atlas/SKILL.md`.
+
+## Checks
+
+`node scripts/shot.mjs <dir>` screenshots key states, runs the feature journeys and asserts the
+canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
+`node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
+it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
+
 ## Films
 
 `film.html?cut=launch` (1080×1080, 18 s) and `film.html?cut=reel` (1080×1920, 21 s) drive the same
@@ -32,5 +50,6 @@ browser they play in real time.
 
 ## Edit the taxonomy
 
-Add a row to `T` in `src/taxonomy.js`: `[operation, domain, id, name, specimen family, mechanism, executions]`.
+Add a row to `T` in `src/taxonomy.js`: `[operation, domain, id, name, specimen family, mechanism, executions]`,
+and its web recipe to `UI`.
 A new specimen family is one function in `src/specimens.js` that returns SVG for `(seed, palette, rng, t)`.

@@ -45,6 +45,24 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
     return out.map((d) => (d >= 1000 ? "css:" : "svg:") + (d % 1000).toFixed(1));
   });
   console.log("registration drift px:", JSON.stringify(drift));
+  // Feature journeys: post detail from a tile, card examples, brief copy, mosaic.
+  await p.evaluate(() => window.__atlas.go("tactile-surface", 10)); await p.waitForTimeout(1500);
+  const feats = await p.evaluate(async () => {
+    const r = {}, { A } = window.__atlas;
+    r.examples = document.querySelectorAll(".card .ex-row img").length;
+    document.querySelector(".card .ex-row img")?.click(); await new Promise((x) => setTimeout(x, 300));
+    r.detail = document.querySelector(".lightbox.on .lb-act a")?.href ?? null; document.querySelector(".lb-x")?.click();
+    const b = window.__atlas.brief(["tactile-surface"], "component"); r.brief = [b.kind, b.techniques[0].id, b.techniques[0].references.length];
+    r.briefButtons = document.querySelectorAll(".card [data-brief]").length;
+    document.querySelector(".shelf .wid").click(); await new Promise((x) => setTimeout(x, 400));
+    r.mosaic = [document.querySelector(".shelf").classList.contains("wide"), document.querySelectorAll(".shelf .grid a").length];
+    return r;
+  });
+  console.log("features:", JSON.stringify(feats));
+  await p.screenshot({ path: `${out}/bm-mosaic.png` });
+  await p.evaluate(() => document.querySelector(".shelf .wid").click());
+  await p.evaluate(() => document.querySelector(".card .ex-row img")?.click()); await p.waitForTimeout(800);
+  await p.screenshot({ path: `${out}/bm-detail.png` }); await p.keyboard.press("Escape");
   console.log("svg transform mid-wheel:", await p.evaluate(() => document.getElementById("atlas").style.transform || "(committed)"));
   console.log("stat:", await p.evaluate(() => document.getElementById("stat").textContent));
 }

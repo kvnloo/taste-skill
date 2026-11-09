@@ -148,7 +148,7 @@ export async function mountBookmarks(A, { go }) {
   // Shelf.
   const shelf = document.createElement("aside"); shelf.className = "shelf"; document.body.appendChild(shelf);
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
-  let subject = null, open = innerWidth > 700, last = null, shown = 60;
+  let subject = null, open = innerWidth > 700, wide = false, last = null, shown = 60;
   const under = (id) => {
     const n = A.graph.byId.get(id) ?? A.graph.root;
     const t = n.level === 4 ? n.parent : n;
@@ -162,8 +162,8 @@ export async function mountBookmarks(A, { go }) {
     // Posts with media first: text-only posts were classified from text alone and their scores are not comparable.
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
     const title = n.level === 0 ? "All saved posts" : (n.level === 4 ? n.parent : n).name;
-    shelf.className = "shelf" + (open ? " open" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR BOOKMARKS</small><b>${esc(title)}</b> <span>${list.length}</span></div></header>
+    shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR BOOKMARKS</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="Mosaic view (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}</div>
       <div class="grid">${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = opById[t.op];
@@ -171,15 +171,17 @@ export async function mountBookmarks(A, { go }) {
           ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}" alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
           ${b.type === "video" || b.type === "animated_gif" ? `<i class="play">▶</i>` : ""}
           <span class="meta"><em style="background:${op.color}"></em>${esc(t.name)} · @${esc(b.author)}</span></a>`;
-      }).join("")}</div>${list.length > shown ? `<button class="more">Show ${Math.min(60, list.length - shown)} more</button>` : ""}
+      }).join("")}</div>${list.length > shown ? `<button class="more">Show ${Math.min(wide ? 180 : 60, list.length - shown)} more</button>` : ""}
       <footer>${esc(data.method)} · labels are estimates</footer>`;
   }
   shelf.addEventListener("click", (e) => {
+    if (e.target.closest(".wid")) { wide = !wide; open = true; shown = wide ? 180 : 60; draw(); return; }
     if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; shown = 60; draw(); }
-    if (e.target.closest(".more")) { shown += 60; draw(); }
+    if (e.target.closest(".more")) { shown += wide ? 180 : 60; draw(); }
     const post = e.target.closest("[data-post]"); if (post) { e.preventDefault(); detail(byId.get(post.dataset.post)); }
   });
+  addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") { wide = !wide; open = true; shown = wide ? 180 : 60; draw(); } });
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
   (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } paint(); requestAnimationFrame(poll); })();
   draw(); go(A.view.focus, 600);

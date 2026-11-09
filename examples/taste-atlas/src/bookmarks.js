@@ -120,20 +120,32 @@ export async function mountBookmarks(A, { go }) {
   function detail(b) {
     if (!b) return;
     const t = techById.get(b.technique), line = lineage(A.graph.byId.get(b.technique)), op = opById[t.op], also = techById.get(b.also);
-    const media = b.strip && (b.type === "video" || b.type === "animated_gif") ? `<img src="./data/${esc(b.strip)}" alt="" class="strip" />` : "";
+    // Videos/GIFs play straight away from X's mp4 (the click is the user gesture, so sound is allowed);
+    // the poster is the local thumb, and the frame strip remains the fallback if the mp4 fails.
+    const gif = b.type === "animated_gif";
+    const media = b.video ? "" : b.strip && (b.type === "video" || gif) ? `<img src="./data/${esc(b.strip)}" alt="" class="strip" />` : "";
+    const hero = b.video
+      ? `<video class="hero" src="${esc(b.video)}" ${b.thumb ? `poster="./data/${esc(b.thumb)}"` : ""} autoplay playsinline ${gif ? "loop muted" : "controls"} preload="auto"></video>`
+      : b.thumb ? `<img src="./data/${esc(b.thumb)}" alt="" class="hero" />` : "";
     box.innerHTML = `<div class="lb-card"><button class="lb-x" aria-label="Close">×</button>
-      ${b.thumb ? `<img src="./data/${esc(b.thumb)}" alt="" class="hero" />` : ""}${media}
+      ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
       <p>${esc(b.text)}</p><div class="lb-meta">@${esc(b.author)} · ${esc(b.date ?? "")}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act"><a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">Open on X ↗</a><button data-go="${t.id}">Go to ${esc(t.name)}</button></div></div></div>`;
     box.classList.add("on");
+    const v = box.querySelector("video");
+    if (v) {
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); // blocked with sound → play muted
+      v.onerror = () => { if (b.strip) v.outerHTML = `<img src="./data/${esc(b.strip)}" alt="" class="strip" />`; };
+    }
   }
+  const close = () => { box.querySelector("video")?.pause(); box.classList.remove("on"); box.innerHTML = ""; };
   box.addEventListener("click", (e) => {
     const g = e.target.closest("[data-go]")?.dataset.go;
-    if (g) { e.preventDefault(); box.classList.remove("on"); go(g); return; }
-    if (e.target === box || e.target.closest(".lb-x")) box.classList.remove("on");
+    if (g) { e.preventDefault(); close(); go(g); return; }
+    if (e.target === box || e.target.closest(".lb-x")) close();
   });
-  addEventListener("keydown", (e) => { if (e.key === "Escape" && box.classList.contains("on")) { box.classList.remove("on"); e.stopImmediatePropagation(); } }, true);
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && box.classList.contains("on")) { close(); e.stopImmediatePropagation(); } }, true);
 
   // Lineage card: "N recorded examples" strip for the focused technique/specimen.
   A.view.cardExtra = (f) => {

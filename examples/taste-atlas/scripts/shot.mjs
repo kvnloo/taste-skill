@@ -3,7 +3,8 @@ import { createRequire } from "node:module";
 const require = createRequire(process.env.PW_FROM ?? "/mnt/zer0models/project-artifacts/taste/pw/package.json");
 const { chromium } = require("playwright-core");
 const out = process.argv[2] ?? ".";
-const b = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
+// CHROME=/path picks the browser; Google Chrome has the H.264 codec X's mp4s need, Playwright's Chromium does not.
+const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];
@@ -59,6 +60,15 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
     return r;
   });
   console.log("features:", JSON.stringify(feats));
+  // Clicking a video bookmark plays it at once (real mouse click = user gesture).
+  const vid = await p.evaluate(() => { const a = [...document.querySelectorAll(".shelf .grid a")].find((x) => x.querySelector(".play")); return a?.dataset.post; });
+  if (vid) {
+    await p.click(`.shelf .grid [data-post="${vid}"]`); await p.waitForTimeout(3500);
+    const v = await p.evaluate(() => { const v = document.querySelector(".lightbox.on video"); return v ? { playing: !v.paused && v.currentTime > 0, t: +v.currentTime.toFixed(1), muted: v.muted, err: v.error?.code ?? null } : (document.querySelector(".lightbox.on .strip") ? "strip-fallback" : null); });
+    await p.screenshot({ path: `${out}/bm-video.png` });
+    await p.keyboard.press("Escape");
+    console.log("video autoplay:", JSON.stringify(v), "closed+stopped:", await p.evaluate(() => !document.querySelector(".lightbox video")));
+  }
   await p.screenshot({ path: `${out}/bm-mosaic.png` });
   await p.evaluate(() => document.querySelector(".shelf .wid").click());
   await p.evaluate(() => document.querySelector(".card .ex-row img")?.click()); await p.waitForTimeout(800);

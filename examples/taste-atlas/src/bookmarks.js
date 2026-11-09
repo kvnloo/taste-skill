@@ -28,7 +28,7 @@ export async function mountBookmarks(A, { go }) {
   // Shelf.
   const shelf = document.createElement("aside"); shelf.className = "shelf"; document.body.appendChild(shelf);
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
-  let subject = null, open = true, last = null, shown = 60;
+  let subject = null, open = innerWidth > 700, last = null, shown = 60;
   const under = (id) => {
     const n = A.graph.byId.get(id) ?? A.graph.root;
     const t = n.level === 4 ? n.parent : n;
@@ -54,11 +54,11 @@ export async function mountBookmarks(A, { go }) {
       <footer>${esc(data.method)} · labels are estimates</footer>`;
   }
   shelf.addEventListener("click", (e) => {
-    if (e.target.closest(".tog")) { open = !open; draw(); go(A.view.focus); }
+    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; shown = 60; draw(); }
     if (e.target.closest(".more")) { shown += 60; draw(); }
   });
-  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); go(A.view.focus); } });
+  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
   (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } requestAnimationFrame(poll); })();
   draw(); go(A.view.focus, 600);
   return { count: items.length, total: data.count };

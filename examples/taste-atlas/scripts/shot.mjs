@@ -28,5 +28,14 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
   }
   console.log("stat:", await p.evaluate(() => document.getElementById("stat").textContent));
 }
+// Phone viewport (MOBILE=1): overview, technique, shelf open.
+if (process.env.MOBILE) {
+  const m = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  m.on("pageerror", (e) => errs.push(String(e)));
+  for (const [name, hash] of [["m-root", ""], ["m-op", "#evoke"], ["m-tech", "#tactile-surface"]]) {
+    await m.goto(`${base}/?theme=light${hash}`); await m.waitForTimeout(3000); await m.screenshot({ path: `${out}/${name}.png` });
+  }
+  await m.tap(".shelf header"); await m.waitForTimeout(1200); await m.screenshot({ path: `${out}/m-shelf.png` });
+}
 console.log("errors:", JSON.stringify(errs));
 await b.close();

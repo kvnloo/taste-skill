@@ -2,7 +2,7 @@
 [data-theme="dark"] { --bg: #0f1314; --ink: #ece8df; --mute: #8f8a80; --panel: rgba(22, 27, 29, .92); --line: #2a3033; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 Inter, system-ui, sans-serif; overflow: hidden; transition: background .4s; }
-#atlas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; }
+#atlas { touch-action: none; position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; }
 .label { font-family: Inter, sans-serif; font-weight: 500; pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
 .label.l1 { font-family: "Archivo Black", sans-serif; letter-spacing: .02em; text-transform: uppercase; }
 .label.l3 { font-family: "IBM Plex Mono", monospace; }
@@ -68,3 +68,20 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 .shelf .grid .meta em { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
 .shelf .more { margin: 0 14px 10px; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 10px; padding: 7px; cursor: pointer; }
 .shelf footer { padding: 8px 14px; font: 10px "IBM Plex Mono", monospace; color: var(--mute); border-top: 1px solid var(--line); }
+/* Phone: compact card on top, graph in the middle, bookmarks as a bottom sheet. */
+@media (max-width: 700px) {
+  .chrome { top: 10px; left: 12px; right: 12px; gap: 8px; } .brand { font-size: 14px; }
+  .search input { width: 132px; padding: 7px 10px; } #hits { width: calc(100vw - 24px); } #hits div { padding: 12px; }
+  .card, body:not(.film) .card { left: 12px; right: 12px; top: 56px; bottom: auto; width: auto; padding: 8px 12px; border-radius: 12px; }
+  .card .rows { display: grid; grid-template-columns: .9fr .9fr 1.5fr .8fr; gap: 6px; }
+  .card .row { display: block; padding: 2px 0; border: 0; } .card .ic, .card .mech, .card .preview { display: none; }
+  .card .v, .card .v.mono { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .card .v em { font-size: 15px; }
+  .card .k { font-size: 9px; letter-spacing: .06em; }
+  .card .intro h1 { font-size: 20px; margin: 4px 0; } .card .intro h1 em { font-size: 24px; } .card .intro p { font-size: 12px; margin: 0; } .card .intro .lv { display: none; }
+  .legend, .hint { display: none; }
+  .shelf, .shelf.open { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 58px; border-radius: 16px 16px 0 0; border-bottom: 0; transition: height .25s; }
+  .shelf.open { height: 52vh; } .shelf:not(.open) header div { display: block; }
+  .shelf header { padding: 10px 14px; } .shelf header div { flex: 1; } .shelf .tog { order: 2; width: 36px; height: 36px; transform: rotate(-90deg); }
+  .shelf .chips { flex-wrap: nowrap; overflow-x: auto; } .shelf .chips button { padding: 6px 12px; white-space: nowrap; }
+  .shelf .grid { grid-template-columns: repeat(2, 1fr); }
+}

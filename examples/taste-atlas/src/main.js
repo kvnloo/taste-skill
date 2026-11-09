@@ -5,15 +5,22 @@ import { mountBookmarks } from "./bookmarks.js";
 
 const svg = document.getElementById("atlas");
 const card = document.getElementById("card");
-// The graph lays out in the space left of the bookmarks shelf when it is open.
-const W = () => innerWidth - (document.querySelector(".shelf.open") ? Math.min(440, innerWidth * 0.42) + 36 : 0);
-const A = createAtlas({ svg, card, width: W, height: () => innerHeight });
+const A = createAtlas({ svg, card, width: () => innerWidth, height: () => innerHeight });
+// Free screen area for the graph: left of the shelf on desktop; between card and bottom sheet on phones.
+const phone = () => innerWidth <= 700;
+function region() {
+  const shelf = document.querySelector(".shelf")?.getBoundingClientRect();
+  if (phone()) { const top = (card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
+  return { x: 0, y: 0, w: innerWidth - (document.querySelector(".shelf.open") ? innerWidth - shelf.left + 18 : 0), h: innerHeight };
+}
+// Deeper zooms leave room for side labels (technique names sit beside their node).
+const fitR = (id) => A.fit(id, phone() ? ((A.graph.byId.get(id)?.level ?? 0) >= 3 ? 0.72 : 0.94) : 0.82, region());
 const params = new URLSearchParams(location.search);
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 let tween = null;
 function go(id, ms = 900) {
-  const from = { ...A.view.cam }, to = A.fit(id);
+  const from = { cx: innerWidth / 2, cy: innerHeight / 2, ...A.view.cam }, to = fitR(id);
   A.view.focus = id; A.view.hover = null;
   if (id !== "root" && !location.hash.endsWith(id)) history.replaceState(null, "", "#" + id);
   if (id === "root") history.replaceState(null, "", location.pathname + location.search);
@@ -27,7 +34,7 @@ function frame(now) {
     const k = Math.min(1, (now - tween.t0) / tween.ms), e = ease(k);
     const { from, to, dip } = tween;
     const s = Math.exp(Math.log(from.s) + (Math.log(to.s) - Math.log(from.s)) * e) * (1 - dip * Math.sin(Math.PI * e));
-    A.view.cam = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, s };
+    A.view.cam = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, s, cx: from.cx + (to.cx - from.cx) * e, cy: from.cy + (to.cy - from.cy) * e };
     if (k >= 1) tween = null;
   }
   A.render({ t: now / 1000, animate: true });
@@ -36,7 +43,15 @@ function frame(now) {
 
 // Pointer: click focuses, drag pans, wheel zooms.
 let drag = null;
-svg.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, cam: { ...A.view.cam }, moved: false }; svg.setPointerCapture(e.pointerId); });
+const touches = new Map(); let pinch = null, swallowTap = false;
+svg.addEventListener("pointerdown", (e) => { touches.set(e.pointerId, e); if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cam: { ...A.view.cam } }; drag = null; return; } });
+svg.addEventListener("pointermove", (e) => {
+  if (!touches.has(e.pointerId)) return; touches.set(e.pointerId, e);
+  if (pinch && touches.size === 2) { const [a, b] = [...touches.values()]; tween = null; A.view.cam = { ...pinch.cam, s: Math.min(4, Math.max(0.12, pinch.cam.s * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d)) }; }
+});
+const endTouch = (e) => { touches.delete(e.pointerId); if (touches.size < 2 && pinch) { pinch = null; drag = null; swallowTap = true; } if (!touches.size) setTimeout(() => (swallowTap = false)); };
+svg.addEventListener("pointerup", endTouch); svg.addEventListener("pointercancel", endTouch);
+svg.addEventListener("pointerdown", (e) => { if (pinch) return; drag = { x: e.clientX, y: e.clientY, cam: { ...A.view.cam }, moved: false }; svg.setPointerCapture(e.pointerId); });
 svg.addEventListener("pointermove", (e) => {
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -48,7 +63,7 @@ svg.addEventListener("pointermove", (e) => {
 });
 svg.addEventListener("pointerup", (e) => {
   const wasDrag = drag?.moved; drag = null;
-  if (wasDrag) return;
+  if (wasDrag || swallowTap) return;
   const id = e.target.closest?.(".node")?.dataset.id;
   if (id) go(id === A.view.focus ? (A.graph.byId.get(id).parent?.id ?? "root") : id);
   else go("root");
@@ -56,8 +71,8 @@ svg.addEventListener("pointerup", (e) => {
 svg.addEventListener("wheel", (e) => {
   e.preventDefault(); tween = null;
   const c = A.view.cam, k = Math.exp(-e.deltaY * 0.0015), s = Math.min(4, Math.max(0.12, c.s * k));
-  const mx = (e.clientX - W() / 2) / c.s + c.x, my = (e.clientY - innerHeight / 2) / c.s + c.y;
-  A.view.cam = { s, x: mx - (e.clientX - W() / 2) / s, y: my - (e.clientY - innerHeight / 2) / s };
+  const ox = c.cx ?? innerWidth / 2, oy = c.cy ?? innerHeight / 2, mx = (e.clientX - ox) / c.s + c.x, my = (e.clientY - oy) / c.s + c.y;
+  A.view.cam = { ...c, s, x: mx - (e.clientX - ox) / s, y: my - (e.clientY - oy) / s };
 }, { passive: false });
 
 // Search.
@@ -89,13 +104,14 @@ addEventListener("keydown", (e) => {
 });
 document.getElementById("legend").innerHTML = OPERATIONS.map((o) => `<button data-id="${o.id}"><i style="background:${o.color}"></i>${o.name}</button>`).join("");
 document.getElementById("legend").onclick = (e) => { const id = e.target.closest("[data-id]")?.dataset.id; if (id) go(id); };
-addEventListener("resize", () => { if (!tween) A.view.cam = A.fit(A.view.focus); });
+addEventListener("resize", () => { A.view.labelScale = phone() ? 0.8 : 1; if (!tween) A.view.cam = fitR(A.view.focus); });
 addEventListener("hashchange", () => { const id = location.hash.slice(1); if (A.graph.byId.has(id) && id !== A.view.focus) go(id); });
 
 const st = stats();
 document.getElementById("stat").textContent = `${OPERATIONS.length} operations · ${st.techniques} techniques · ${st.executions} specimens`;
 theme(params.get("theme") ?? localStorage.getItem("atlas-theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-A.view.cam = A.fit("root");
+A.view.labelScale = phone() ? 0.8 : 1;
+A.view.cam = fitR("root");
 const start = location.hash.slice(1);
 if (A.graph.byId.has(start)) go(start, 1200);
 window.__atlas = { A, go };

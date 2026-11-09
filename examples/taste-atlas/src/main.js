@@ -37,7 +37,7 @@ function frame(now) {
     A.view.cam = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, s, cx: from.cx + (to.cx - from.cx) * e, cy: from.cy + (to.cy - from.cy) * e };
     if (k >= 1) tween = null;
   }
-  A.render({ t: now / 1000, animate: true });
+  A.render({ t: now / 1000, animate: true, motionFps: 12, live: true });
   requestAnimationFrame(frame);
 }
 
@@ -64,8 +64,8 @@ svg.addEventListener("pointermove", (e) => {
 svg.addEventListener("pointerup", (e) => {
   const wasDrag = drag?.moved; drag = null;
   if (wasDrag || swallowTap) return;
-  const tile = A.tileAt?.(e.target);
-  if (tile) { if (A.view.focus === tile.tech) open(tile.url, "_blank", "noopener"); else go(tile.tech); return; }
+  const tile = A.tileAt?.(e);
+  if (tile) { if (A.view.focus === tile.tech) A.openPost(tile.id); else go(tile.tech); return; }
   const id = e.target.closest?.(".node")?.dataset.id;
   if (id) go(id === A.view.focus ? (A.graph.byId.get(id).parent?.id ?? "root") : id);
   else go("root");

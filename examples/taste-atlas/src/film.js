@@ -89,7 +89,7 @@ const LAUNCH = {
     document.getElementById("atlas").style.opacity = showGraph ? 1 : 0;
     card.style.display = showGraph && t > 8.1 ? "block" : "none";
     Object.assign(card.style, { left: "48px", bottom: "48px", top: "auto", width: "340px" });
-    A.render({ cam, focus, theme: "light", t, animate: true, labelScale: 1.5, cardIn: eo(seg(t, 8.1, 8.6)) });
+    A.invalidate(); A.render({ cam, focus, theme: "light", t, animate: true, labelScale: 1.5, cardIn: eo(seg(t, 8.1, 8.6)) });
     if (showGraph) reveal(t, 5.1);
     if (t < 3.4) {
       const k = back(seg(t, 1.0, 1.45));
@@ -146,7 +146,7 @@ const REEL = {
     document.getElementById("atlas").style.opacity = show ? eo(seg(t, 4.0, 4.6)) : 0;
     card.style.display = show && t > 4.6 ? "block" : "none";
     Object.assign(card.style, { left: "60px", right: "60px", width: "auto", bottom: "90px", top: "auto" });
-    A.render({ cam, focus, theme, t, animate: true, labelScale: 1.7, cardIn: eo(seg(t, 4.6, 5.1)) });
+    A.invalidate(); A.render({ cam, focus, theme, t, animate: true, labelScale: 1.7, cardIn: eo(seg(t, 4.6, 5.1)) });
     if (t < 4.0) {
       const k = back(seg(t, 0.9, 1.35));
       return html(`<div class="callout" style="left:80px;right:80px;top:${H / 2 - 120}px;text-align:center;opacity:${clamp(k * 1.4)};transform:scale(${0.8 + 0.2 * k})">You know it's good.<br/>Can you say <em>why?</em></div>`);

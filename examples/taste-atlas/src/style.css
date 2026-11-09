@@ -87,3 +87,29 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
   .shelf .grid { grid-template-columns: repeat(2, 1fr); }
 }
 .bm-tile { cursor: pointer; } .bm-tile rect { stroke: var(--bg); stroke-width: 1; } .bm-tile:hover rect { stroke: var(--ink); stroke-width: 3; }
+
+/* Constellation canvas sits behind the graph SVG. */
+#bm-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#atlas { background: transparent; }
+/* Recorded examples on the lineage card. */
+.card .examples { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.card .examples .k { font: 500 10px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); margin-bottom: 6px; }
+.card .ex-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.card .ex-row img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; display: block; }
+/* Post detail view. */
+.lightbox { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(10, 12, 13, .55); backdrop-filter: blur(6px); padding: 20px; }
+.lightbox.on { display: flex; }
+.lb-card { position: relative; background: var(--bg); color: var(--ink); border-radius: 14px; max-width: 560px; width: 100%; max-height: 90vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.lb-card .hero { display: block; width: 100%; max-height: 56vh; object-fit: contain; background: #000; border-radius: 14px 14px 0 0; }
+.lb-card .strip { display: block; width: 100%; }
+.lb-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 20px; cursor: pointer; }
+.lb-body { padding: 14px 16px 16px; }
+.lb-line { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 11px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .04em; }
+.lb-body p { margin: 10px 0 6px; white-space: pre-wrap; word-break: break-word; }
+.lb-meta { color: var(--mute); font-size: 12px; } .lb-meta a { color: inherit; }
+.lb-act { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.lb-act a, .lb-act button { font: 600 13px Inter; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); text-decoration: none; cursor: pointer; }
+.lb-act .primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+@media (max-width: 700px) { .card .examples { display: none; } }
+.swatch { display: none; } .lod .swatch { display: inline; } .lod .art { display: none; }
+#atlas { transform-origin: 0 0; will-change: transform; }

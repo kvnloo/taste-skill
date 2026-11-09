@@ -88,7 +88,8 @@ export function createAtlas({ svg, card, width, height }) {
       const s = 0.5, w = CARD.w * s, h = CARD.h * s;
       part.frame = el("g", { transform: `translate(${-w / 2} ${-h / 2}) scale(${s})` }, grp);
       const clip = el("clipPath", { id: "clip-" + n.id }, grp); el("rect", { width: CARD.w, height: CARD.h, rx: 6 }, clip);
-      part.art = el("g", { "clip-path": `url(#clip-${n.id})` }, part.frame);
+      el("rect", { width: CARD.w, height: CARD.h, rx: 6, class: "swatch", fill: opById[n.op].color, opacity: 0.55 }, part.frame);
+      part.art = el("g", { "clip-path": `url(#clip-${n.id})`, class: "art" }, part.frame);
       part.art.innerHTML = specimen(n.family, n.seed, 0);
       part.shape = el("rect", { width: CARD.w, height: CARD.h, rx: 6, fill: "none", "stroke-width": 2 }, part.frame);
       part.motion = MOTION.has(n.family);
@@ -112,67 +113,113 @@ export function createAtlas({ svg, card, width, height }) {
     return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s, cx: R.x + R.w / 2, cy: R.y + R.h / 2 };
   }
 
+  // Rendering is split by what invalidates it, because the app calls render() every animation frame:
+  // state (focus/hover/theme) recolours; camera moves the world and resizes visible labels and edges;
+  // animated specimens repaint only when on screen and big enough to see, at view.motionFps (film: every call).
+  const keys = { state: "", cam: "", motion: "", card: "" };
+  let force = false; // invalidate(): next render rewrites every attribute (films mutate opacities between frames)
+  const setA = (e, k, v) => { if (force || e["_" + k] !== v) { e["_" + k] = v; e.setAttribute(k, v); } };
+  let lit = null, committed = null, lastKey = "";
   function render(next = {}) {
     Object.assign(view, next);
     const { cam, theme, t } = view;
     const dark = theme === "dark";
-    svg.ownerDocument.documentElement.dataset.theme = theme;
     const W = width(), H = height();
-    world.setAttribute("transform", `translate(${(cam.cx ?? W / 2) - cam.x * cam.s} ${(cam.cy ?? H / 2) - cam.y * cam.s}) scale(${cam.s})`);
     const f = g.byId.get(view.focus) ?? g.root;
-    const lit = f.level === 0 ? null : subtree(f.level === 4 ? f.parent : f);
-    if (lit) for (let p = f; p; p = p.parent) lit.add(p.id);
-    const inv = (view.labelScale ?? 1) / cam.s;
-    for (const [key, part] of parts) {
-      if (key.startsWith("e:")) {
-        const id = key.slice(2), n = g.byId.get(id);
-        const on = !lit || (lit.has(id) && lit.has(n.parent.id));
-        part.setAttribute("stroke", color(n.op, theme));
-        part.setAttribute("stroke-width", (on && lit ? 2.2 : 1.2) * Math.max(inv, 0.6));
-        part.setAttribute("stroke-opacity", on ? (n.parent.level === 0 ? 0.35 : 0.85) : 0.04);
-        continue;
+    const stateKey = `${view.focus}|${view.hover}|${theme}`;
+    if (stateKey !== keys.state) {
+      keys.state = stateKey; keys.cam = "";
+      svg.ownerDocument.documentElement.dataset.theme = theme;
+      lit = f.level === 0 ? null : subtree(f.level === 4 ? f.parent : f);
+      if (lit) for (let p = f; p; p = p.parent) lit.add(p.id);
+      for (const [key, part] of parts) {
+        if (key.startsWith("e:")) {
+          const id = key.slice(2), n = g.byId.get(id), on = !lit || (lit.has(id) && lit.has(n.parent.id));
+          setA(part, "stroke", color(n.op, theme));
+          setA(part, "stroke-opacity", on ? (n.parent.level === 0 ? 0.35 : 0.85) : 0.04);
+          continue;
+        }
+        const n = part.n, on = !lit || lit.has(n.id), c = color(n.op, theme);
+        setA(part.g, "opacity", on ? 1 : 0.05);
+        if (part.art) setA(part.art, "display", on ? "inline" : "none");
+        if (n.level === 0) { setA(part.shape, "fill", dark ? "#ece8df" : "#1b1a17"); setA(part.shape, "opacity", lit ? 0 : 1); }
+        else if (n.kind !== "execution") {
+          setA(part.shape, "fill", dark ? "#1a1f21" : "#f7f6f2");
+          setA(part.shape, "stroke", n.id === view.focus || n.id === view.hover ? c : on && lit ? c : dark ? "#3c4245" : "#cfccc4");
+          setA(part.icon, "color", on && (lit || n.kind === "operation") ? c : dark ? "#7d7a72" : "#9a968c");
+        } else {
+          setA(part.shape, "stroke", n.id === view.focus || n.id === view.hover ? c : dark ? "#2a2f31" : "#d9d6ce");
+          setA(part.shape, "stroke-width", n.id === view.focus ? 6 : 2);
+        }
+        setA(part.label, "fill", n.level === 1 ? c : dark ? "#d8d4ca" : "#2c2a26");
       }
-      const n = part.n, on = !lit || lit.has(n.id), c = color(n.op, theme);
-      part.g.setAttribute("opacity", on ? 1 : 0.05);
-      if (n.level === 0) { part.shape.setAttribute("fill", dark ? "#ece8df" : "#1b1a17"); part.shape.setAttribute("opacity", lit ? 0 : 1); }
-      else if (n.kind !== "execution") {
-        part.shape.setAttribute("fill", dark ? "#1a1f21" : "#f7f6f2");
-        part.shape.setAttribute("stroke", n.id === view.focus || n.id === view.hover ? c : on && lit ? c : dark ? "#3c4245" : "#cfccc4");
-        part.icon.setAttribute("color", on && (lit || n.kind === "operation") ? c : dark ? "#7d7a72" : "#9a968c");
-      } else {
-        part.shape.setAttribute("stroke", n.id === view.focus ? c : n.id === view.hover ? c : dark ? "#2a2f31" : "#d9d6ce");
-        part.shape.setAttribute("stroke-width", n.id === view.focus ? 6 : 2);
-        if (part.motion && view.animate) part.art.innerHTML = specimen(n.family, n.seed, t + n.seed * 0.37);
-      }
-      // Labels keep a constant on-screen size; small levels hide when zoomed out.
-      const px = n.level === 1 ? 17 : n.level === 2 ? 12 : n.level === 3 ? 13 : 11;
-      const minS = [0, 0, 0.32, 0.42, 0.75][n.level];
-      const show = n.level > 0 && cam.s >= minS && (n.level < 4 || (lit && lit.has(n.id)) || cam.s > 1.1);
-      const off = n.level === 1 ? 62 : n.level === 4 ? 64 : 34;
-      const fs = px * Math.max(inv, 0.5);
-      part.label.setAttribute("font-size", fs);
-      if (n.level === 1) {
-        // Operation labels sit outside the ring, anchored away from the centre, so they never pile up.
-        const cx = Math.cos(n.a), cy = Math.sin(n.a), d = 48 + fs * 0.4;
-        part.label.setAttribute("x", cx * d);
-        part.label.setAttribute("y", cy * d + fs * 0.35 + (Math.abs(cx) < 0.3 ? Math.sign(cy) * fs * 0.6 : 0));
-        part.label.setAttribute("text-anchor", Math.abs(cx) < 0.3 ? "middle" : cx > 0 ? "start" : "end");
-      } else part.label.setAttribute("y", off + fs);
-      part.label.setAttribute("fill", n.level === 1 ? c : dark ? "#d8d4ca" : "#2c2a26");
-      part.label.setAttribute("opacity", show ? 1 : 0);
-      part.label.setAttribute("class", "label l" + n.level);
     }
-    renderCard(f);
+    const camKey = `${cam.x.toFixed(1)},${cam.y.toFixed(1)},${cam.s.toFixed(4)},${cam.cx},${cam.cy},${W},${H},${view.labelScale}`;
+    // Live mode: in Blink every SVG transform change relayouts the whole tree, so while the camera moves
+    // the committed SVG is moved by a composited CSS transform; it re-commits once the camera holds still
+    // for a frame or drifts far enough to blur or uncover an edge. Films (no view.live) commit every frame.
+    const ox = cam.cx ?? W / 2, oy = cam.cy ?? H / 2;
+    if (view.live && committed && keys.cam && camKey !== keys.cam) {
+      const C = committed, k = cam.s / C.s, tx = ox - C.ox * k + (C.x - cam.x) * cam.s, ty = oy - C.oy * k + (C.y - cam.y) * cam.s;
+      const far = k < 0.85 || k > 1.3 || Math.abs(tx + (k - 1) * W / 2) > W * 0.15 || Math.abs(ty + (k - 1) * H / 2) > H * 0.15;
+      if (!far && camKey !== lastKey) { svg.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`; lastKey = camKey; return renderCard(f, view.t), void (force = false); }
+    }
+    lastKey = camKey;
+    if (camKey !== keys.cam) {
+      keys.cam = camKey; committed = { x: cam.x, y: cam.y, s: cam.s, ox, oy };
+      if (view.live) svg.style.transform = "";
+      world.setAttribute("transform", `translate(${(cam.cx ?? W / 2) - cam.x * cam.s} ${(cam.cy ?? H / 2) - cam.y * cam.s}) scale(${cam.s})`);
+      // Specimen art under ~16px on screen is a flat swatch (level of detail), which keeps zooms cheap.
+      world.classList.toggle("lod", CARD.w * 0.5 * cam.s < 16);
+      const inv = (view.labelScale ?? 1) / cam.s;
+      for (const [key, part] of parts) {
+        if (key.startsWith("e:")) { const id = key.slice(2), on = !lit || (lit.has(id) && lit.has(g.byId.get(id).parent.id)); setA(part, "stroke-width", ((on && lit ? 2.2 : 1.2) * Math.max(inv, 0.6)).toFixed(2)); continue; }
+        // Labels keep a constant on-screen size; small levels hide when zoomed out (display:none skips layout).
+        const n = part.n, minS = [0, 0, 0.32, 0.42, 0.75][n.level];
+        const show = n.level > 0 && cam.s >= minS && (n.level < 4 || (lit && lit.has(n.id)) || cam.s > 1.1);
+        setA(part.label, "display", show ? "inline" : "none");
+        if (!show) continue;
+        const px = n.level === 1 ? 17 : n.level === 2 ? 12 : n.level === 3 ? 13 : 11;
+        const off = n.level === 1 ? 62 : n.level === 4 ? 64 : 34;
+        const fs = +(px * Math.max(inv, 0.5)).toFixed(2);
+        setA(part.label, "font-size", fs);
+        if (n.level === 1) {
+          // Operation labels sit outside the ring, anchored away from the centre, so they never pile up.
+          const cx = Math.cos(n.a), cy = Math.sin(n.a), d = 48 + fs * 0.4;
+          setA(part.label, "x", (cx * d).toFixed(1));
+          setA(part.label, "y", (cy * d + fs * 0.35 + (Math.abs(cx) < 0.3 ? Math.sign(cy) * fs * 0.6 : 0)).toFixed(1));
+          setA(part.label, "text-anchor", Math.abs(cx) < 0.3 ? "middle" : cx > 0 ? "start" : "end");
+        } else setA(part.label, "y", (off + fs).toFixed(1));
+        setA(part.label, "class", "label l" + n.level);
+      }
+    }
+    const tq = view.motionFps ? Math.floor(t * view.motionFps) / view.motionFps : t;
+    const motionKey = view.animate ? `${tq}|${camKey}` : "";
+    if (motionKey && motionKey !== keys.motion) {
+      keys.motion = motionKey;
+      const size = CARD.w * 0.5 * cam.s;
+      if (size > 24) for (const part of parts.values()) {
+        if (!part.motion) continue;
+        const n = part.n, sx = ox + (n.x - cam.x) * cam.s, sy = oy + (n.y - cam.y) * cam.s;
+        if (sx < -size || sy < -size || sx > W + size || sy > H + size || (lit && !lit.has(n.id))) continue;
+        part.art.innerHTML = specimen(n.family, n.seed, tq + n.seed * 0.37);
+      }
+    }
+    renderCard(f, tq);
+    force = false;
   }
 
-  function renderCard(f) {
+  function renderCard(f, tq) {
     if (!card) return;
+    const fade = () => { if (card._in !== view.cardIn) { card._in = view.cardIn; card.style.opacity = view.cardIn; card.style.transform = `translateY(${(1 - view.cardIn) * -12}px)`; } };
+    const line = f.level ? lineage(f) : [], ex = line[3];
+    const key = `${f.id}|${view.theme}|${ex && MOTION.has(ex.family) ? tq : ""}`;
+    if (key === keys.card) return fade();
+    keys.card = key;
     if (!f.level) {
       card.innerHTML = `<div class="intro"><div class="eyebrow">A TAXONOMY OF TASTE</div><h1>Why an image <em>works.</em></h1><p>Every specimen is filed by what it asks the viewer to do, the property that carries it, and the named technique.</p>${LEVELS.map((L, i) => `<div class="lv"><b>0${i + 1}</b>${L}</div>`).join("")}</div>`;
-      card.style.opacity = view.cardIn; card.style.transform = `translateY(${(1 - view.cardIn) * -12}px)`;
-      return;
+      return fade();
     }
-    const line = lineage(f);
     const op = line[0]?.op;
     const c = op ? color(op, view.theme) : "#8a857a";
     const rows = LEVELS.map((L, i) => {
@@ -182,18 +229,18 @@ export function createAtlas({ svg, card, width, height }) {
       if (i === 1 && n) ic = icon(n.domain);
       if (i === 2 && n) { ic = icon("technique"); sub = `<div class="mech">${n.mech}</div>`; }
       if (i === 3) {
-        if (n) { ic = `<svg viewBox="0 0 ${CARD.w} ${CARD.h}" width="22" height="28">${specimen(n.family, n.seed, view.t)}</svg>`; val = `<em>${n.name}</em>`; }
+        if (n) { ic = `<svg viewBox="0 0 ${CARD.w} ${CARD.h}" width="22" height="28">${specimen(n.family, n.seed, tq)}</svg>`; val = `<em>${n.name}</em>`; }
         else if (line[2]) val = `<em>${line[2].children.length} specimens</em>`;
       }
       return `<div class="row ${n ? "on" : ""}"><div class="ic" style="color:${c}">${ic}</div><div><div class="k"><b style="color:${c}">0${i + 1}</b> ${L}</div><div class="v ${i === 2 ? "mono" : ""}">${val}</div>${sub}</div></div>`;
     }).join("");
-    const preview = line[3] ? `<div class="preview"><svg viewBox="0 0 ${CARD.w} ${CARD.h}" preserveAspectRatio="xMidYMid slice">${specimen(line[3].family, line[3].seed, view.t)}</svg></div>` : "";
-    card.innerHTML = `<div class="rows">${rows}</div>${preview}`;
-    card.style.opacity = view.cardIn;
-    card.style.transform = `translateY(${(1 - view.cardIn) * -12}px)`;
+    const preview = line[3] ? `<div class="preview"><svg viewBox="0 0 ${CARD.w} ${CARD.h}" preserveAspectRatio="xMidYMid slice">${specimen(line[3].family, line[3].seed, tq)}</svg></div>` : "";
+    // Optional layers (bookmarks) append "recorded examples" under the lineage.
+    card.innerHTML = `<div class="rows">${rows}</div>${preview}${view.cardExtra?.(f) ?? ""}`;
+    fade();
   }
 
-  const api = { graph: g, view, render, fit, parts, world };
+  const api = { graph: g, view, render, fit, parts, world, invalidate: () => { keys.card = keys.state = keys.cam = keys.motion = ""; force = true; } };
   Object.defineProperty(api, "extraBounds", { set: (f) => (view.extraBounds = f) });
   return api;
 }

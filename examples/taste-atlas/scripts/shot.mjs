@@ -26,6 +26,26 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
     await p.screenshot({ path: `${out}/${name}.png` });
     console.log(name, JSON.stringify(await p.evaluate(() => ({ title: document.querySelector(".shelf header b")?.textContent, tiles: document.querySelectorAll(".shelf .grid a").length, broken: [...document.querySelectorAll(".shelf img")].filter((i) => i.complete && !i.naturalWidth).length }))));
   }
+  // Mid-flight and wheel-zoom frames: the SVG moves by a composited CSS transform between commits, so the
+  // canvas tiles must stay registered with the graph while the camera is in motion.
+  await p.evaluate(() => window.__atlas.go("root", 10)); await p.waitForTimeout(800);
+  await p.evaluate(() => window.__atlas.go("differentiate", 1600)); await p.waitForTimeout(700);
+  await p.screenshot({ path: `${out}/bm-mid.png` });
+  await p.waitForTimeout(1500); await p.mouse.move(700, 450); for (let i = 0; i < 4; i++) await p.mouse.wheel(0, -120);
+  await p.waitForTimeout(60); await p.screenshot({ path: `${out}/bm-wheel.png` });
+  // Registration invariant: SVG node centre on screen (CSS transform included) == canvas camera projection.
+  const drift = await p.evaluate(async () => {
+    const { A, go } = window.__atlas, out = []; go("root", 10); await new Promise((r) => setTimeout(r, 300)); go("tactile-surface", 1200);
+    for (let i = 0; i < 14; i++) {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const n = A.graph.byId.get("tactile-surface"), c = A.view.cam, r = A.parts.get(n.id).shape.getBoundingClientRect();
+      const ex = (c.cx ?? innerWidth / 2) + (n.x - c.x) * c.s, ey = (c.cy ?? innerHeight / 2) + (n.y - c.y) * c.s;
+      out.push(Math.hypot(r.x + r.width / 2 - ex, r.y + r.height / 2 - ey) + (document.getElementById("atlas").style.transform ? 1000 : 0));
+    }
+    return out.map((d) => (d >= 1000 ? "css:" : "svg:") + (d % 1000).toFixed(1));
+  });
+  console.log("registration drift px:", JSON.stringify(drift));
+  console.log("svg transform mid-wheel:", await p.evaluate(() => document.getElementById("atlas").style.transform || "(committed)"));
   console.log("stat:", await p.evaluate(() => document.getElementById("stat").textContent));
 }
 // Phone viewport (MOBILE=1): overview, technique, shelf open.

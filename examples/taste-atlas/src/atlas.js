@@ -148,8 +148,15 @@ export function createAtlas({ svg, card, width, height }) {
       const minS = [0, 0, 0.32, 0.42, 0.75][n.level];
       const show = n.level > 0 && cam.s >= minS && (n.level < 4 || (lit && lit.has(n.id)) || cam.s > 1.1);
       const off = n.level === 1 ? 62 : n.level === 4 ? 64 : 34;
-      part.label.setAttribute("font-size", px * Math.max(inv, 0.5));
-      part.label.setAttribute("y", off + px * Math.max(inv, 0.5));
+      const fs = px * Math.max(inv, 0.5);
+      part.label.setAttribute("font-size", fs);
+      if (n.level === 1) {
+        // Operation labels sit outside the ring, anchored away from the centre, so they never pile up.
+        const cx = Math.cos(n.a), cy = Math.sin(n.a), d = 48 + fs * 0.4;
+        part.label.setAttribute("x", cx * d);
+        part.label.setAttribute("y", cy * d + fs * 0.35 + (Math.abs(cx) < 0.3 ? Math.sign(cy) * fs * 0.6 : 0));
+        part.label.setAttribute("text-anchor", Math.abs(cx) < 0.3 ? "middle" : cx > 0 ? "start" : "end");
+      } else part.label.setAttribute("y", off + fs);
       part.label.setAttribute("fill", n.level === 1 ? c : dark ? "#d8d4ca" : "#2c2a26");
       part.label.setAttribute("opacity", show ? 1 : 0);
       part.label.setAttribute("class", "label l" + n.level);

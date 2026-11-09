@@ -17,5 +17,16 @@ await p.fill("#q", "closure"); await p.keyboard.press("Enter"); await p.waitForT
 console.log("after search focus:", await p.evaluate(() => window.__atlas.A.view.focus), "hash:", await p.evaluate(() => location.hash));
 await p.keyboard.press("Escape"); await p.waitForTimeout(1200);
 console.log("after esc focus:", await p.evaluate(() => window.__atlas.A.view.focus));
+// Private bookmarks layer (only when ./data is present): shelf follows focus, thumbnails load.
+const base = process.env.BASE ?? "http://127.0.0.1:8787";
+await p.goto(`${base}/?theme=light`);
+if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).catch(() => null)) {
+  for (const [name, id] of [["bm-root", "root"], ["bm-op", "evoke"], ["bm-tech", "tactile-surface"]]) {
+    await p.evaluate((id) => window.__atlas.go(id), id); await p.waitForTimeout(2500);
+    await p.screenshot({ path: `${out}/${name}.png` });
+    console.log(name, JSON.stringify(await p.evaluate(() => ({ title: document.querySelector(".shelf header b")?.textContent, tiles: document.querySelectorAll(".shelf .grid a").length, broken: [...document.querySelectorAll(".shelf img")].filter((i) => i.complete && !i.naturalWidth).length }))));
+  }
+  console.log("stat:", await p.evaluate(() => document.getElementById("stat").textContent));
+}
 console.log("errors:", JSON.stringify(errs));
 await b.close();

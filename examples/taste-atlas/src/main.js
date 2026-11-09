@@ -1,10 +1,13 @@
 // Interactive app: camera tweening, click-to-focus, search, theme, deep links (#technique-id).
 import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
+import { mountBookmarks } from "./bookmarks.js";
 
 const svg = document.getElementById("atlas");
 const card = document.getElementById("card");
-const A = createAtlas({ svg, card, width: () => innerWidth, height: () => innerHeight });
+// The graph lays out in the space left of the bookmarks shelf when it is open.
+const W = () => innerWidth - (document.querySelector(".shelf.open") ? Math.min(440, innerWidth * 0.42) + 36 : 0);
+const A = createAtlas({ svg, card, width: W, height: () => innerHeight });
 const params = new URLSearchParams(location.search);
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
@@ -53,8 +56,8 @@ svg.addEventListener("pointerup", (e) => {
 svg.addEventListener("wheel", (e) => {
   e.preventDefault(); tween = null;
   const c = A.view.cam, k = Math.exp(-e.deltaY * 0.0015), s = Math.min(4, Math.max(0.12, c.s * k));
-  const mx = (e.clientX - innerWidth / 2) / c.s + c.x, my = (e.clientY - innerHeight / 2) / c.s + c.y;
-  A.view.cam = { s, x: mx - (e.clientX - innerWidth / 2) / s, y: my - (e.clientY - innerHeight / 2) / s };
+  const mx = (e.clientX - W() / 2) / c.s + c.x, my = (e.clientY - innerHeight / 2) / c.s + c.y;
+  A.view.cam = { s, x: mx - (e.clientX - W() / 2) / s, y: my - (e.clientY - innerHeight / 2) / s };
 }, { passive: false });
 
 // Search.
@@ -96,4 +99,5 @@ A.view.cam = A.fit("root");
 const start = location.hash.slice(1);
 if (A.graph.byId.has(start)) go(start, 1200);
 window.__atlas = { A, go };
+mountBookmarks(A, { go }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks`; window.__atlas.bm = bm; });
 requestAnimationFrame(frame);

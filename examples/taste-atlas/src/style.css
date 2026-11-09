@@ -46,3 +46,25 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 .card .intro p { margin: 0 0 12px; color: var(--mute); font-size: 13px; }
 .card .intro .lv { font: 11px "IBM Plex Mono", monospace; letter-spacing: .12em; padding: 6px 0; border-top: 1px dashed var(--line); }
 .card .intro .lv b { font-weight: 500; margin-right: 10px; color: var(--mute); }
+/* Private bookmarks layer (src/bookmarks.js). */
+.bm-badge text { fill: #fff; font: 600 12px "IBM Plex Mono", monospace; pointer-events: none; }
+.bm-badge circle { stroke: var(--bg); stroke-width: 3px; }
+.shelf { position: fixed; top: 72px; right: 18px; bottom: 44px; width: 52px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.08); display: flex; flex-direction: column; overflow: hidden; transition: width .25s; }
+.shelf.open { width: min(440px, 42vw); }
+.shelf header { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.shelf header small { display: block; font: 10px "IBM Plex Mono", monospace; letter-spacing: .1em; color: var(--mute); }
+.shelf header b { font: 400 22px "Instrument Serif", serif; } .shelf header span { font: 12px "IBM Plex Mono", monospace; color: var(--mute); }
+.shelf .tog { border: 1px solid var(--line); background: none; color: var(--ink); width: 26px; height: 26px; border-radius: 8px; cursor: pointer; flex: none; }
+.shelf:not(.open) > :not(header), .shelf:not(.open) header div { display: none; }
+.shelf .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+.shelf .chips button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 99px; padding: 3px 10px; font: 11px Inter, sans-serif; cursor: pointer; }
+.shelf .chips button.on { background: var(--ink); color: var(--bg); }
+.shelf .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; padding: 4px 14px 14px; align-content: start; }
+.shelf .grid a { position: relative; display: block; border-radius: 10px; overflow: hidden; background: var(--line); aspect-ratio: 4 / 3; color: var(--ink); text-decoration: none; }
+.shelf .grid img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; } .shelf .grid a:hover img { transform: scale(1.05); }
+.shelf .grid .txt { padding: 8px; font-size: 11px; line-height: 1.3; height: 100%; box-sizing: border-box; overflow: hidden; }
+.shelf .grid .play { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 9px; color: #fff; background: rgba(0,0,0,.55); border-radius: 99px; padding: 2px 6px; }
+.shelf .grid .meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 7px 5px; font: 10px "IBM Plex Mono", monospace; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.7)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shelf .grid .meta em { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+.shelf .more { margin: 0 14px 10px; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 10px; padding: 7px; cursor: pointer; }
+.shelf footer { padding: 8px 14px; font: 10px "IBM Plex Mono", monospace; color: var(--mute); border-top: 1px solid var(--line); }

@@ -59,8 +59,9 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 .shelf .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
 .shelf .chips button { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 99px; padding: 3px 10px; font: 11px Inter, sans-serif; cursor: pointer; }
 .shelf .chips button.on { background: var(--ink); color: var(--bg); }
-.shelf .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; padding: 4px 14px 14px; align-content: start; }
-.shelf .grid a { position: relative; display: block; border-radius: 10px; overflow: hidden; background: var(--line); aspect-ratio: 4 / 3; color: var(--ink); text-decoration: none; }
+.shelf .grid { flex: 1 1 auto; min-height: 0; grid-auto-rows: max-content; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; padding: 4px 14px 14px; align-content: start; }
+.shelf .grid a { position: relative; display: block; border-radius: 10px; overflow: hidden; background: var(--line); height: 0; padding-bottom: 75%; color: var(--ink); text-decoration: none; }
+.shelf .grid img, .shelf .grid .txt { position: absolute; inset: 0; }
 .shelf .grid img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; } .shelf .grid a:hover img { transform: scale(1.05); }
 .shelf .grid .txt { padding: 8px; font-size: 11px; line-height: 1.3; height: 100%; box-sizing: border-box; overflow: hidden; }
 .shelf .grid .play { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 9px; color: #fff; background: rgba(0,0,0,.55); border-radius: 99px; padding: 2px 6px; }
@@ -77,11 +78,11 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
   .card .row { display: block; padding: 2px 0; border: 0; } .card .ic, .card .mech, .card .preview { display: none; }
   .card .v, .card .v.mono { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .card .v em { font-size: 15px; }
   .card .k { font-size: 9px; letter-spacing: .06em; }
-  .card .intro h1 { font-size: 20px; margin: 4px 0; } .card .intro h1 em { font-size: 24px; } .card .intro p { font-size: 12px; margin: 0; } .card .intro .lv { display: none; }
+  .card .intro h1 { font-size: 20px; margin: 4px 0; } .card .intro h1 em { font-size: 24px; } .card .intro p { display: none; } .card .intro .lv { display: none; }
   .legend, .hint { display: none; }
   .shelf, .shelf.open { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 58px; border-radius: 16px 16px 0 0; border-bottom: 0; transition: height .25s; }
   .shelf.open { height: 52vh; } .shelf:not(.open) header div { display: block; }
   .shelf header { padding: 10px 14px; } .shelf header div { flex: 1; } .shelf .tog { order: 2; width: 36px; height: 36px; transform: rotate(-90deg); }
-  .shelf .chips { flex-wrap: nowrap; overflow-x: auto; } .shelf .chips button { padding: 6px 12px; white-space: nowrap; }
+  .shelf .chips { flex: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .shelf .chips button { padding: 6px 12px; white-space: nowrap; }
   .shelf .grid { grid-template-columns: repeat(2, 1fr); }
 }

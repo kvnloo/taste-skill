@@ -36,6 +36,10 @@ if (process.env.MOBILE) {
     await m.goto(`${base}/?theme=light${hash}`); await m.waitForTimeout(3000); await m.screenshot({ path: `${out}/${name}.png` });
   }
   await m.tap(".shelf header"); await m.waitForTimeout(1200); await m.screenshot({ path: `${out}/m-shelf.png` });
+  // Real-phone repro: dark theme, sheet open at the overview, Android-sized viewport.
+  await m.setViewportSize({ width: 360, height: 780 }); await m.goto(`${base}/?theme=dark`); await m.waitForTimeout(2500);
+  await m.tap(".shelf header"); await m.waitForTimeout(3500); await m.screenshot({ path: `${out}/m-dark-shelf.png` });
+  console.log("tiles", JSON.stringify(await m.evaluate(() => [...document.querySelectorAll(".shelf .grid a")].slice(0, 6).map((a) => { const r = a.getBoundingClientRect(), i = a.querySelector("img")?.getBoundingClientRect(); return [r.width | 0, r.height | 0, i ? [i.width | 0, i.height | 0] : null]; }))));
 }
 console.log("errors:", JSON.stringify(errs));
 await b.close();

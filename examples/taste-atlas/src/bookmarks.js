@@ -39,7 +39,8 @@ export async function mountBookmarks(A, { go }) {
   function draw() {
     const focus = A.view.focus, n = A.graph.byId.get(focus) ?? A.graph.root;
     let list = under(focus); if (subject) list = list.filter((b) => b.subject === subject);
-    if (n.level === 0) list = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    // Posts with media first: text-only posts were classified from text alone and their scores are not comparable.
+    list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
     const title = n.level === 0 ? "All saved posts" : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "");
     shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR BOOKMARKS</small><b>${esc(title)}</b> <span>${list.length}</span></div></header>

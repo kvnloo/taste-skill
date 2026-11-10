@@ -1,0 +1,116 @@
+{
+  "$comment": "Work layer map for scripts/work.mjs: products -> component areas (path globs per repo, first match wins in this order) and their pages. A component listed under one product with also:[...] is drawn once there and as a portal in the others. Private URLs go in $ATLAS_DATA/work.config.local.json (same shape; pages merge by component id).",
+  "windowDays": 21,
+  "halfLifeHours": 48,
+  "sources": {
+    "seed": { "file": "/mnt/zer0models/workspace/zer0/data/operations/glide-board-20261110/preview/data.json", "label": "board 11-10", "windowHours": 24 },
+    "asks": "/mnt/zer0models/workspace/zer0/data/operations/glide-requirements-20261110/asks-raw.json",
+    "lanes": "~/.z0int/config/z0live-lanes.json"
+  },
+  "repos": {
+    "glide": { "path": "/mnt/zer0models/worktrees/glide-one-install", "gh": "kvnloo/glide" },
+    "taste": { "path": "../../..", "gh": "kvnloo/taste-skill" },
+    "z0live": { "path": "/mnt/zer0models/workspace/zer0/products/z0live", "gh": "kvnloo/z0live" },
+    "aodl-views": { "path": "/mnt/zer0models/workspace/zer0/products/aodl-views", "gh": "kvnloo/aodl-views" },
+    "aodl": { "path": "/mnt/zer0models/github/aodl", "gh": "kvnloo/aodl" },
+    "fframestudio": { "path": "/mnt/zer0models/workspace/zer0/products/fframestudio", "gh": "kvnloo/fframestudio" },
+    "ephemeral-ui": { "path": "/mnt/zer0models/github/ephemeral-ui", "gh": "kvnloo/ephemeral-ui" }
+  },
+  "products": [
+    {
+      "id": "glide", "name": "Glide", "seed": "glide", "deadline": "2026-11-11T22:00:00Z", "keywords": ["glide"],
+      "components": [
+        { "id": "tests", "name": "Tests & CI", "paths": { "glide": ["frontend/src/__tests__/**", "tests/**", ".github/**", "**/*.test.ts", "**/tests/**"] } },
+        { "id": "voice", "name": "Voice", "also": ["hermes-tern"], "keywords": ["voice", "dictat\\w*", "push to talk", "hold to talk"],
+          "paths": { "glide": ["frontend/src/voice/**", "**/*dictation*", "**/*talk*", "**/*Voice*", "frontend/docs/voice.md"] } },
+        { "id": "cards", "name": "Cards · ephemeral-ui", "also": ["ephemeral-ui"], "keywords": ["ephemeral cards?", "eui cards?", "tern cards?"],
+          "paths": { "glide": ["frontend/src/eui/**", "ephemeral_cards.py", "**/*eui*"] } },
+        { "id": "taste", "name": "Taste pages", "also": ["taste"], "keywords": ["taste (app|atlas|pane|board)", "atlas", "library", "boards?"],
+          "paths": { "glide": ["**/*taste*"], "taste": ["examples/taste-atlas/{index,history,network,film}.html", "examples/taste-atlas/src/{main,atlas,bookmarks,taxonomy,specimens,brief,nav,history,network,film,work,pack,style}.{js,css}"] },
+          "pages": [
+            { "name": "Atlas", "url": "http://127.0.0.1:8789/" },
+            { "name": "Library", "url": "http://127.0.0.1:8789/library" },
+            { "name": "Boards", "url": "http://127.0.0.1:8789/boards" },
+            { "name": "Network", "url": "http://127.0.0.1:8789/network" },
+            { "name": "History", "url": "http://127.0.0.1:8789/history" },
+            { "name": "Film", "url": "http://127.0.0.1:8789/film.html" },
+            { "name": "Board: glide hackathon", "url": "http://127.0.0.1:8789/s/glide-hackathon-project--e170/" },
+            { "name": "Status board", "url": "http://127.0.0.1:8789/s/glide-hackathon-project--e170/preview/" }
+          ] },
+        { "id": "core", "name": "Glide core & docs", "keywords": ["corrections? memory", "/glide", "skill router", "hill climb", "offload"], "paths": { "glide": ["glide/**", "demo/**", "skills/**", "docs/{glide-memory,memory,spec}.md", "README.md", "after-install.md", "plugin.yaml", "pyproject.toml", "scripts/**"] } },
+        { "id": "agents", "name": "Agents & tools", "keywords": ["subagents?", "tool calls?"],
+          "paths": { "glide": ["frontend/src/{agents,tools,hermes,gateway,wire,connections,processes,github,prs}/**"] } },
+        { "id": "backends", "name": "Python backends", "also": ["hermes-tern"], "paths": { "glide": ["*.py", "lab/**"] } },
+        { "id": "tern-ui", "name": "Tern UI", "also": ["hermes-tern"], "keywords": ["tern ui", "sidebar", "transcript", "thinking orbs?"],
+          "paths": { "glide": ["frontend/**", "docs/**"] },
+          "pages": [
+            { "name": "Hero (dark)", "file": "glide:docs/images/hero-dark.png" },
+            { "name": "Transcript", "file": "glide:docs/images/transcript.png" },
+            { "name": "Sidebar", "file": "glide:docs/images/sidebar.png" },
+            { "name": "PR tray", "file": "glide:docs/images/pr-tray.png" },
+            { "name": "Approval", "file": "glide:docs/images/approval.png" },
+            { "name": "Subagents", "file": "glide:docs/images/subagents.png" }
+          ] }
+      ]
+    },
+    {
+      "id": "hermes-tern", "name": "hermes-tern", "seed": "tern", "keywords": ["tern"],
+      "components": [
+        { "id": "upstream", "name": "Upstream sync", "keywords": ["upstream", "alt-glitch"], "prTitle": "sync|upstream", "paths": { "glide": ["FORK.md"] } }
+      ]
+    },
+    {
+      "id": "z0live", "name": "z0live", "seed": "z0live", "keywords": ["z0live", "phone call", "realtime voice"],
+      "components": [
+        { "id": "tests", "name": "Tests", "paths": { "z0live": ["desktop/tests/**", "tests/**", ".github/**"] } },
+        { "id": "lanes", "name": "Lanes", "also": ["aodl"], "keywords": ["lanes?", "barge.in", "council"], "lanes": true,
+          "paths": { "z0live": ["desktop/z0live_desktop/{*lane*,blackboard,delegation}*", "hermes-plugin/**"] } },
+        { "id": "voice", "name": "Voice runtime", "keywords": ["voice", "speech", "gestures?"],
+          "paths": { "z0live": ["desktop/z0live_desktop/{*voice*,live,bidi_protocol,gestures,ring_recording}*"] } },
+        { "id": "relay", "name": "Phone relay", "keywords": ["relay", "phone"],
+          "paths": { "z0live": ["desktop/z0live_desktop/{*relay*,phone_*,server,gateway_reply,delivery}*", "desktop/*.py"] } },
+        { "id": "work", "name": "Work tools", "keywords": ["tool.call summar\\w*", "work tools?"], "paths": { "z0live": ["desktop/z0live_desktop/**"] } },
+        { "id": "docs", "name": "Docs & deploy", "paths": { "z0live": ["docs/**", "deploy/**", "bin/**", "*.md"] } }
+      ]
+    },
+    {
+      "id": "aodl", "name": "AODL", "seed": "aodl", "keywords": ["aodl", "intent gate", "intent contracts?"],
+      "components": [
+        { "id": "views", "name": "Views (RepoMap, glyphs)", "keywords": ["repo map", "glyphs?"], "paths": { "aodl-views": ["**"] } },
+        { "id": "compiler", "name": "Compiler & patterns", "keywords": ["compiler", "patterns?"], "paths": { "aodl": ["**"] } },
+        { "id": "gate", "name": "Intent gate", "keywords": ["intent gate"], "prs": ["kvnloo/z0intelligence#216"] }
+      ]
+    },
+    {
+      "id": "fframestudio", "name": "fframestudio", "seed": "ffs", "keywords": ["fframestudio", "fframes", "film studio"],
+      "components": [
+        { "id": "tests", "name": "Tests & CI", "paths": { "fframestudio": ["test/**", ".github/**", "package.json"] } },
+        { "id": "web", "name": "Studio web", "keywords": ["studio"], "paths": { "fframestudio": ["web/**"] },
+          "pages": [{ "name": "Studio", "url": "http://127.0.0.1:17888/" }] },
+        { "id": "bridge", "name": "Bridge", "keywords": ["bridge"], "paths": { "fframestudio": ["bridge/**"] } },
+        { "id": "delivery", "name": "Delivery & tools", "keywords": ["render", "export"], "paths": { "fframestudio": ["delivery/**", "hosted/**", "spike/**", "tools/**"] } },
+        { "id": "tern", "name": "Tern plugin", "paths": { "fframestudio": ["tern/**"] } },
+        { "id": "docs", "name": "Docs & evidence", "paths": { "fframestudio": ["docs/**", ".agents/**", "*.md"] } }
+      ]
+    },
+    {
+      "id": "ephemeral-ui", "name": "ephemeral-ui", "seed": "eui", "keywords": ["ephemeral.ui", "\\beui\\b"],
+      "components": [
+        { "id": "site", "name": "Site", "keywords": ["site"], "paths": { "ephemeral-ui": ["**/js/**", "*.html", "*.css", "**/*.html", "**/*.css", "**/vendor/**", ".nojekyll"] },
+          "pages": [{ "name": "Public site", "url": "https://kvnloo.github.io/ephemeral-ui/" }] },
+        { "id": "media", "name": "Media", "paths": { "ephemeral-ui": ["**/media/**"] } },
+        { "id": "schema", "name": "Card schema", "keywords": ["schema", "card kinds?"], "paths": { "ephemeral-ui": ["**/schema/**", "**/data/**"] } }
+      ]
+    },
+    {
+      "id": "taste", "name": "Taste", "seed": "taste", "keywords": ["taste"],
+      "components": [
+        { "id": "boards", "name": "Boards", "keywords": ["board"],
+          "paths": { "taste": ["examples/taste-atlas/{board,boards}.html", "examples/taste-atlas/src/board*", "examples/taste-atlas/scripts/{board,agent,design}.mjs"] } },
+        { "id": "importers", "name": "Importers", "keywords": ["import\\w*", "linkedin", "history"], "paths": { "taste": ["examples/taste-atlas/scripts/**"] } },
+        { "id": "skill", "name": "Taste skill", "keywords": ["taste skill", "skill"], "paths": { "taste": ["skills/**"] } },
+        { "id": "repo", "name": "Repo & CI", "paths": { "taste": ["tests/**", ".github/**", "*.md", ".claude-plugin/**", ".codex-plugin/**", "examples/**"] } }
+      ]
+    }
+  ]
+}

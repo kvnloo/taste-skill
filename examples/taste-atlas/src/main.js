@@ -2,6 +2,7 @@
 import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
+import { mountWork } from "./work.js";
 import { brief, briefMarkdown } from "./brief.js";
 import { mountNav, getTheme, saveTheme, setView } from "./nav.js";
 
@@ -10,12 +11,12 @@ const card = document.getElementById("card");
 const A = createAtlas({ svg, card, width: () => innerWidth, height: () => innerHeight });
 // Free screen area for the graph: left of the shelf on desktop; between card and bottom sheet on phones.
 const phone = () => innerWidth <= 700;
-function region() {
+function region(avoidCard) {
   const shelf = document.querySelector(".shelf")?.getBoundingClientRect();
   if (phone()) { const top = (card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
   // The mosaic shelf covers the whole graph (left: 18px); fitting into the zero-width gap gave scale Infinity.
-  const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth;
-  return { x: 0, y: 0, w: free < 240 ? innerWidth : free, h: innerHeight };
+  const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth, x = avoidCard ? card.getBoundingClientRect().right + 12 : 0;
+  return { x, y: 0, w: free - x < 240 ? innerWidth : free - x, h: innerHeight };
 }
 // Deeper zooms leave room for side labels (technique names sit beside their node).
 const fitR = (id) => A.fit(id, phone() ? ((A.graph.byId.get(id)?.level ?? 0) >= 3 ? 0.72 : 0.94) : 0.82, region());
@@ -26,10 +27,11 @@ const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 let tween = null;
 // Fit a world box [x0, y0, x1, y1] (a layer or category on the outer ring) into the free region.
-function fitBox([x0, y0, x1, y1]) { const R = region(), pad = 0.86; return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.min((R.w * pad) / (x1 - x0), (R.h * pad) / (y1 - y0), 2.2), cx: R.x + R.w / 2, cy: R.y + R.h / 2 }; }
-function fly(box, ms = 900) { flyTo(fitBox(box), ms); }
+function fitBox([x0, y0, x1, y1], max = 2.2, avoidCard = false) { const R = region(avoidCard), pad = 0.86; return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.min((R.w * pad) / (x1 - x0), (R.h * pad) / (y1 - y0), max), cx: R.x + R.w / 2, cy: R.y + R.h / 2 }; }
+// The Work layer flies deeper (its components are small in world units) and keeps clear of the card.
+function fly(box, ms = 900, max = 2.2, avoidCard = false) { flyTo(fitBox(box, Math.min(max, MAX_ZOOM), avoidCard), ms); }
 function go(id, ms = 900) {
-  window.__atlas?.bm?.pick(null, true);
+  window.__atlas?.bm?.pick(null, true); window.__atlas?.work?.blur();
   flyTo(fitR(id), ms, id);
 }
 function flyTo(to, ms, id) {
@@ -78,6 +80,7 @@ svg.addEventListener("pointermove", (e) => {
 svg.addEventListener("pointerup", (e) => {
   const wasDrag = drag?.moved; drag = null;
   if (wasDrag || swallowTap) return;
+  if (A.workAt?.(e)) return;
   const tile = A.tileAt?.(e);
   if (tile) { if (A.view.focus === tile.tech) A.openPost(tile.id); else go(tile.tech); return; }
   const id = e.target.closest?.(".node")?.dataset.id;
@@ -98,26 +101,28 @@ let sel = 0, found = [];
 function show() {
   const s = q.value.trim().toLowerCase();
   // Taxonomy nodes first, then your posts (text + picture description); the shelf filters live as you type.
-  const bm = window.__atlas.bm, posts = s && bm ? bm.matching(s).length : 0, cats = s && bm ? bm.findGroups(s) : [];
+  const bm = window.__atlas.bm, posts = s && bm ? bm.matching(s).length : 0, cats = s && bm ? bm.findGroups(s) : [], work = s ? window.__atlas.work?.find(s) ?? [] : [];
   bm?.setQuery(s);
   found = s ? all.filter((n) => n.name.toLowerCase().includes(s) || (n.mech ?? "").toLowerCase().includes(s)).slice(0, 6) : [];
   // Categories (a layer, channel, language or company) first: picking one keeps you on the canvas.
-  found = [...cats.map((g) => ({ g })), ...(posts ? [{ lib: posts }] : []), ...found].slice(0, 10);
+  found = [...work.map((w) => ({ w })), ...cats.map((g) => ({ g })), ...(posts ? [{ lib: posts }] : []), ...found].slice(0, 10);
   sel = 0;
   hits.className = s ? "on" : "";
-  hits.innerHTML = found.map((n, i) => n.g
+  hits.innerHTML = found.map((n, i) => n.w
+    ? `<div data-w="${n.w.id}" class="${i === sel ? "sel" : ""}">${n.w.name.replace(/</g, "&lt;")}<small>${n.w.sub}</small></div>`
+    : n.g
     ? `<div data-g="${n.g.key.replace(/"/g, "&quot;")}" class="${i === sel ? "sel" : ""}">${n.g.name.replace(/</g, "&lt;")}<small>${n.g.sub} · ${n.g.n.toLocaleString()}</small></div>`
     : n.lib
     ? `<div data-lib="1" class="lib ${i === sel ? "sel" : ""}">${n.lib} of your posts<small>show in Library ↵</small></div>`
     : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
 }
-const pickHit = (h) => { if (!h) return; if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
+const pickHit = (h) => { if (!h) return; if (h.w) { q.value = ""; window.__atlas.bm?.setQuery(""); hits.className = ""; q.blur(); window.__atlas.work.focus(h.w.id); return; } if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
 q.addEventListener("input", show);
 q.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { sel = (sel + (e.key === "ArrowDown" ? 1 : found.length - 1)) % Math.max(1, found.length); [...hits.children].forEach((d, i) => d.classList.toggle("sel", i === sel)); e.preventDefault(); }
   if (e.key === "Enter") pickHit(found[sel]);
 });
-hits.addEventListener("click", (e) => { const d = e.target.closest("[data-id],[data-lib],[data-g]"); if (d) pickHit(d.dataset.g ? found.find((h) => h.g?.key === d.dataset.g) : d.dataset.lib ? found.find((h) => h.lib) : found.find((h) => h.id === d.dataset.id)); });
+hits.addEventListener("click", (e) => { const d = e.target.closest("[data-id],[data-lib],[data-g],[data-w]"); if (d) pickHit(d.dataset.w ? found.find((h) => h.w?.id === d.dataset.w) : d.dataset.g ? found.find((h) => h.g?.key === d.dataset.g) : d.dataset.lib ? found.find((h) => h.lib) : found.find((h) => h.id === d.dataset.id)); });
 
 // Theme, keys, legend.
 const theme = (t) => { A.view.theme = t; saveTheme(t); };
@@ -153,5 +158,6 @@ card.addEventListener("click", async (e) => {
   b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
-mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; });
+mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
+  .then((work) => { window.__atlas.work = work; }).catch((e) => console.error("work:", e));
 requestAnimationFrame(frame);

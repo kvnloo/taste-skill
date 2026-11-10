@@ -145,7 +145,7 @@ export function github(user, top = 500, gh = (args) => execFileSync("gh", args, 
     "--jq", ".[] | {at: .starred_at, id: .repo.id, name: .repo.full_name, owner: .repo.owner.login, url: .repo.html_url, desc: .repo.description, topics: .repo.topics, stars: .repo.stargazers_count, lang: .repo.language}"]);
   const items = starred.sort((a, b) => b.at.localeCompare(a.at)).slice(0, top).map((r) => ({
     id: `ghs-${r.id}`, url: r.url, title: r.name, author: r.owner, date: r.at.slice(0, 10), likes: r.stars, type: "repo", source: "github",
-    why: `starred${r.lang ? ` · ${r.lang}` : ""}`, album: r.desc ?? null, topics: r.topics ?? [], score: 0, thumb_url: `https://opengraph.githubassets.com/1/${r.name}`,
+    why: `starred${r.lang ? ` · ${r.lang}` : ""}`, album: r.desc ?? null, topics: r.topics ?? [], score: 0, thumb_url: `https://opengraph.githubassets.com/1/${r.name}`, thumb_alt: `https://avatars.githubusercontent.com/${r.owner}?s=460`,
   }));
   return { kind: "github", items, total: starred.length, series: { unit: "contributions", events, daily, top: topOf(langs), topLabel: "Languages (your repos)", starred: starred.length } };
 }
@@ -172,7 +172,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     let r;
     for (let i = 0; ; i++) { // image hosts (GitHub's opengraph) answer 429 to bursts: back off and retry, honouring Retry-After
       r = await fetch(url, { signal: AbortSignal.timeout(20000), headers: { "user-agent": "taste-atlas" } });
-      if (r.status !== 429 || i === 5) break;
+      if (r.status !== 429 || i === 2) break;
       await new Promise((ok) => setTimeout(ok, (+r.headers.get("retry-after") || 2 ** i) * 1000));
     }
     if (!r.ok) throw new Error(`${r.status} ${url}`);
@@ -188,7 +188,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       if (!img) throw new Error(`no cover found for ${it.author} – ${it.title}`);
     }
     if (!img) throw new Error("no cover source");
-    return save(img, `${it.id}.jpg`);
+    // GitHub's preview cards allow ~100 requests per window: past that, the owner's avatar stands in rather than nothing
+    return save(img, `${it.id}.jpg`).catch((e) => { if (!it.thumb_alt) throw e; process.stderr.write(`cover ${it.id}: ${e.message}, using avatar\n`); return save(it.thumb_alt, `${it.id}.jpg`); });
   };
   let items = [], failed = 0, tried = 0; const report = {};
   const jobs = [...files.map((f) => () => ({ file: f, ...parseHistory(f, top) })), ...(ghUser ? [() => ({ file: `github:${ghUser}`, ...github(ghUser, Math.max(top, 500)) })] : [])];
@@ -198,7 +199,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       tried++; try { it.thumb = await cover(it); } catch (e) { failed++; process.stderr.write(`cover ${it.id}: ${e.message}\n`); }
     }));
     const src = got[0].source; series[src] = { ...ser, from: Object.keys(ser.daily).sort()[0] ?? null, to: Object.keys(ser.daily).sort().at(-1) ?? null, imported: new Date().toISOString().slice(0, 10) };
-    items = items.filter((x) => x.source !== src).concat(got.map(({ thumb_url, oembed, score, ...it }) => ({ ...it, layer: src, technique: null, text: [it.title, it.author, it.album, it.why].filter(Boolean).join(" · ") })));
+    items = items.filter((x) => x.source !== src).concat(got.map(({ thumb_url, thumb_alt, oembed, score, ...it }) => ({ ...it, layer: src, technique: null, text: [it.title, it.author, it.album, it.why].filter(Boolean).join(" · ") })));
     report[src] = { file: f, kind, kept: got.length, of: total, with_cover: got.filter((x) => x.thumb).length };
   }
   const fresh = new Set(items.map((x) => x.source));

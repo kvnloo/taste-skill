@@ -17,6 +17,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 #hits.on { display: block; }
 #hits div { padding: 8px 12px; cursor: pointer; font-size: 13px; }
 #hits div:hover, #hits div.sel { background: var(--line); }
+#hits .lib { border-bottom: 1px dashed var(--line); font-weight: 600; } #hits .none { color: var(--mute); cursor: default; font: 12px "IBM Plex Mono", monospace; }
 #hits small { color: var(--mute); margin-left: 6px; font: 11px "IBM Plex Mono", monospace; }
 #theme { border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer; }
 .card { position: fixed; left: 18px; top: 72px; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0, 0, 0, .08); transition: opacity .2s; }

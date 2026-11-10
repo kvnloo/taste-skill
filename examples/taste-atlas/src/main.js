@@ -3,7 +3,7 @@ import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { brief, briefMarkdown } from "./brief.js";
-import { mountNav, getTheme, saveTheme } from "./nav.js";
+import { mountNav, getTheme, saveTheme, setView } from "./nav.js";
 
 const svg = document.getElementById("atlas");
 const card = document.getElementById("card");
@@ -87,24 +87,31 @@ const all = [...A.graph.byId.values()].filter((n) => n.level > 0);
 let sel = 0, found = [];
 function show() {
   const s = q.value.trim().toLowerCase();
-  found = s ? all.filter((n) => n.name.toLowerCase().includes(s) || (n.mech ?? "").toLowerCase().includes(s)).slice(0, 8) : [];
+  // Taxonomy nodes first, then your posts (text + picture description); the shelf filters live as you type.
+  const bm = window.__atlas.bm, posts = s && bm ? bm.matching(s).length : 0;
+  bm?.setQuery(s);
+  found = s ? all.filter((n) => n.name.toLowerCase().includes(s) || (n.mech ?? "").toLowerCase().includes(s)).slice(0, 6) : [];
+  if (posts) found.unshift({ lib: posts });
   sel = 0;
-  hits.className = found.length ? "on" : "";
-  hits.innerHTML = found.map((n, i) => `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("");
+  hits.className = s ? "on" : "";
+  hits.innerHTML = found.map((n, i) => n.lib
+    ? `<div data-lib="1" class="lib ${i === sel ? "sel" : ""}">${n.lib} of your posts<small>show in Library ↵</small></div>`
+    : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
 }
+const pickHit = (h) => { if (!h) return; if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
 q.addEventListener("input", show);
 q.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { sel = (sel + (e.key === "ArrowDown" ? 1 : found.length - 1)) % Math.max(1, found.length); [...hits.children].forEach((d, i) => d.classList.toggle("sel", i === sel)); e.preventDefault(); }
-  if (e.key === "Enter" && found[sel]) { go(found[sel].id); q.value = ""; show(); q.blur(); }
+  if (e.key === "Enter") pickHit(found[sel]);
 });
-hits.addEventListener("click", (e) => { const id = e.target.closest("[data-id]")?.dataset.id; if (id) { go(id); q.value = ""; show(); } });
+hits.addEventListener("click", (e) => { const d = e.target.closest("[data-id],[data-lib]"); if (d) pickHit(d.dataset.lib ? found.find((h) => h.lib) : found.find((h) => h.id === d.dataset.id)); });
 
 // Theme, keys, legend.
 const theme = (t) => { A.view.theme = t; saveTheme(t); };
 mountNav(document.querySelector(".chrome .brand"));
 document.getElementById("theme").onclick = () => theme(A.view.theme === "dark" ? "light" : "dark");
 addEventListener("keydown", (e) => {
-  if (e.target === q) { if (e.key === "Escape") q.blur(); return; }
+  if (e.target === q) { if (e.key === "Escape") { q.value = ""; show(); q.blur(); } return; }
   if (e.key === "Escape") go(A.graph.byId.get(A.view.focus)?.parent?.id ?? "root");
   if (e.key === "t") theme(A.view.theme === "dark" ? "light" : "dark");
   if (e.key === "/") { q.focus(); e.preventDefault(); }

@@ -200,14 +200,18 @@ export async function mountBookmarks(A, { go }) {
     const techs = new Set(); (function walk(m) { if (m.level === 3) techs.add(m.id); m.children.forEach(walk); })(t);
     return [...techs].flatMap((k) => byTech.get(k) ?? []);
   };
+  // Text search over every post: its text, the labeller's description of the picture, author and title.
+  let query = "";
+  const hay = new Map(everything.map((b) => [b.id, `${b.text ?? ""} ${b.post ?? ""} ${b.seen ?? ""} ${b.title ?? ""} ${b.author ?? ""} ${techById.get(b.technique)?.name ?? ""}`.toLowerCase()]));
+  const matching = (q) => { const ws = q.toLowerCase().split(/\s+/).filter(Boolean); return ws.length ? everything.filter((b) => ws.every((w) => hay.get(b.id).includes(w))) : everything; };
   function draw() {
     const focus = A.view.focus, n = A.graph.byId.get(focus) ?? A.graph.root;
-    let list = under(focus); if (subject) list = list.filter((b) => b.subject === subject); if (layer) list = list.filter((b) => b.layer === layer);
+    let list = query ? matching(query) : under(focus); if (subject) list = list.filter((b) => b.subject === subject); if (layer) list = list.filter((b) => b.layer === layer);
     // Posts with media first: text-only posts were classified from text alone and their scores are not comparable.
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
-    const title = n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
+    const title = query ? `“${query}”` : n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR TASTE</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : "@" + b.author;
@@ -219,6 +223,7 @@ export async function mountBookmarks(A, { go }) {
       <footer>${esc(data.method)} · labels are estimates</footer>`;
   }
   shelf.addEventListener("click", (e) => {
+    if (e.target.closest(".clr")) { e.preventDefault(); setQuery(""); document.getElementById("q").value = ""; return; }
     if (e.target.closest(".wid")) { toggleWide(); return; }
     if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; if (s === "all") layer = null; shown = 60; draw(); }
@@ -230,5 +235,6 @@ export async function mountBookmarks(A, { go }) {
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
   (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } paint(); requestAnimationFrame(poll); })();
   draw(); go(A.view.focus, 600);
-  return { count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
+  function setQuery(q) { q = q.trim(); if (q === query) return; query = q; if (q) open = true; shown = wide ? 180 : 60; draw(); }
+  return { setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

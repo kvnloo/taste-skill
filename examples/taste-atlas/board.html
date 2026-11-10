@@ -26,11 +26,14 @@
   </section>
   <section class="refs">
     <nav id="filters" class="filters"></nav>
+    <div id="compare" class="compare" hidden></div>
     <div id="wall" class="wall"></div>
   </section>
   <aside class="talk">
+    <div id="design" class="design"></div>
     <ol id="notes" class="notes"></ol>
-    <form id="say" class="say"><input id="sayText" placeholder="Note for the agent…" autocomplete="off" maxlength="500" /><button>Send</button></form>
+    <p id="agent" class="agent" hidden></p>
+    <form id="say" class="say"><button type="button" id="mic" class="mic" title="Hold to talk (or hold space)" hidden>● Talk</button><input id="sayText" placeholder="“only the dark ones”, “compare two”…" autocomplete="off" maxlength="1000" /><button>Send</button></form>
   </aside>
 </main>
 <script type="module" src="/src/board.js"></script>

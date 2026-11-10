@@ -48,6 +48,16 @@ keep it updated; the page refreshes within a second of each write. CLI: `scripts
 3. Build a first pass early and `preview <id> <file.html|dir>`; re-run it after every change.
 4. Read `status <id>` before each next step: liked, pinned and noped references and his typed notes
    steer the design. Pinned beats liked; never bring back a noped reference.
+5. Help him choose: `focus <id> <refIds...> --why "<criterion>"` narrows the wall to a shortlist (what
+   "only the dark ones" becomes); `compare <id> <a> <b> --why "<what differs>"` puts two side by side and
+   he picks with a click or keys 1/2 (winner pinned, loser noped). Ask one concrete question per pair.
+6. `design <id>` turns kept refs, techniques, palette and type into an editable `.fig` plus PNG and an
+   OpenPencil edit link (`TASTE_PENCIL_URL`, a self-built OpenPencil; the hosted app predates `?file=`).
+   He can also press "Make design" on the board. The file is his to edit, download and share.
+
+The board's talk bar (typed, or held-to-talk via the browser's speech recognition) goes to a Hermes
+session over ACP (`scripts/agent.mjs`, one per board, `hermes acp`), which drives steps 2-6 itself.
+Permission requests from that session are always denied: the page is reachable on the tailnet.
 
 The board is one view of the Taste app (`board.mjs serve`, your private tailnet URL (`TASTE_BOARD_URL`) and
 :8789, same server): Atlas `/`, Library `/library`, Boards `/boards`. Posts he adds from the library

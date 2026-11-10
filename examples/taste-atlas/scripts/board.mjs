@@ -10,7 +10,11 @@
 //     mine = your X bookmarks + everything below; portfolio = only your own apps, sites, films, repos; "*" = all of them
 //   board.mjs techniques <id> <ids...>|"<request>"   attach atlas techniques (ids, or best matches for a request)
 //   board.mjs preview <id> <file.html|dir>        show the design being built; the page reloads it on change
+//   board.mjs design <id>                         kept refs + direction -> editable .fig (OpenPencil/Figma) + PNG, link to edit
+//   board.mjs focus <id> <refIds...>|clear [--why] show only a shortlist (what a spoken filter becomes)
+//   board.mjs compare <id> <a> <b>|clear [--why]  two refs side by side; the owner picks one (keys 1 / 2)
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
+// The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
 // Sessions: $TASTE_BOARD_HOME (default ~/.cache/taste-board/<id>/), pruned after 7 days idle.
 // Server: 127.0.0.1:$TASTE_BOARD_PORT (8789). $TASTE_BOARD_URL = the address to print instead (e.g. a tailnet URL).
@@ -19,7 +23,7 @@
 // In a Tern pane ($TERN_PANE) `start` docks the board beside the chat as a browser block.
 // reuse-checked: scripts/atlas.mjs -- taxonomy CLI (reused via src/brief.js); sources.mjs -- builds atlas data offline.
 import { createServer } from "node:http";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFile, execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync, cpSync, renameSync, watch, appendFileSync, openSync } from "node:fs";
 import { dirname, join, extname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
@@ -36,6 +40,8 @@ const MCP = process.env.TASTE_SEARCH_MCP ?? "https://mcp.exa.ai/mcp", READER = p
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36";
 const SITES = { dribbble: "dribbble.com/shots", behance: "behance.net/gallery", mobbin: "mobbin.com", web: "" };
 const IDLE_DAYS = 7;
+// Self-hosted OpenPencil web editor; it fetches /s/<id>/design/<id>.fig cross-origin (https only), so the .fig gets CORS for it.
+const PENCIL = (process.env.TASTE_PENCIL_URL ?? "").replace(/\/$/, "");
 
 const argv = process.argv.slice(2), [cmd, ...rest] = argv;
 const opt = (f) => (rest.includes(f) ? rest[rest.indexOf(f) + 1] : null), has = (f) => rest.includes(f);
@@ -168,6 +174,34 @@ function serve() {
         } catch (e) { res.writeHead(400).end(e.message); }
       }); return;
     }
+    if (sub === "/talk" && req.method === "POST") {  // the owner speaks or types to the board's Hermes agent (ACP)
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 4096) req.destroy(); });
+      req.on("end", async () => {
+        let text; try { text = String(JSON.parse(body).text ?? "").trim().slice(0, 1000); } catch { return res.writeHead(400).end("bad json"); }
+        if (!text) return res.writeHead(400).end("empty");
+        appendFileSync(join(d, "picks.jsonl"), JSON.stringify({ ref: null, verdict: "note", text, t: now() }) + "\n");
+        const { agentEnabled, talk } = await import("./agent.mjs");
+        if (!agentEnabled()) return res.writeHead(202, { "content-type": "application/json" }).end(JSON.stringify({ agent: false }));
+        const set = (f) => { const b = read(d); f(b); write(d, b); };
+        talk(m[1], text, `${BASE}/s/${m[1]}/`, (e) => {
+          if (e.type === "busy") set((b) => { b.agent = { state: "thinking", t: now() }; });
+          else if (e.type === "step") set((b) => { b.agent = { ...(b.agent ?? {}), state: "working", step: e.text.slice(0, 160), t: now() }; });
+          else set((b) => { b.agent = null; if (e.text) b.notes.push({ who: "agent", text: (e.type === "error" ? `Agent problem: ${e.text}` : e.text).slice(0, 1200), t: now() }); });
+        });
+        res.writeHead(202, { "content-type": "application/json" }).end(JSON.stringify({ agent: true }));
+      }); return;
+    }
+    if (sub === "/design" && req.method === "POST") {  // "Make design" button: same as `board.mjs design <id>`, in a child process
+      const b = read(d); if (b.design?.state === "building") return res.writeHead(409).end("already building");
+      b.design = { ...(b.design ?? {}), state: "building" }; write(d, b);
+      execFile(process.execPath, [fileURLToPath(import.meta.url), "design", m[1]], { env: process.env, maxBuffer: 16 << 20 }, (err, stdout, stderr) => {
+        const nb = read(d);
+        if (err) { nb.design = { ...(nb.design ?? {}), state: "failed", error: String(stderr || err.message).trim().slice(-400) }; process.stderr.write(`design ${m[1]} failed: ${stderr || err.message}\n`); }
+        else nb.design = { ...nb.design, state: "ready" };
+        write(d, nb);
+      });
+      return res.writeHead(202).end();
+    }
     if (sub === "/ref" && req.method === "POST") {  // a post sent from the atlas/library lightbox
       let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
       req.on("end", () => {
@@ -179,6 +213,12 @@ function serve() {
           res.writeHead(fresh.length ? 201 : 200, { "content-type": "application/json" }).end(JSON.stringify({ added: fresh.length }));
         } catch (e) { res.writeHead(400).end(e.message); }
       }); return;
+    }
+    if (sub.startsWith("/design/")) {
+      const f = inside(join(d, "design"), sub.slice(7));
+      if (!f || /\/\.work(\/|$)/.test(f)) return res.writeHead(403).end();
+      const cors = PENCIL ? { "access-control-allow-origin": new URL(PENCIL).origin, vary: "origin" } : {};
+      return file(res, f, f.endsWith(".fig") ? { ...cors, "content-disposition": `inline; filename="${basename(f)}"` } : cors);
     }
     if (sub.startsWith("/preview/")) { const f = inside(join(d, "preview"), sub.slice(8)); return f ? file(res, f.endsWith("/") || !extname(f) ? join(f, "index.html") : f, { "content-security-policy": "frame-ancestors 'self'" }) : res.writeHead(403).end(); }
     res.writeHead(404).end("not found");
@@ -278,12 +318,32 @@ switch (cmd) {
     const b = read(d); b.preview = { rev: (b.preview?.rev ?? 0) + 1, from: basename(resolve(src)) }; write(d, b);
     out({ ok: true, rev: b.preview.rev, url: `${BASE}/s/${b.id}/preview/` }); break;
   }
+  case "design": {  // board -> editable OpenPencil/Figma .fig + PNG; opens in the self-hosted editor ($TASTE_PENCIL_URL)
+    const d = dir(pos[0]), b = read(d), v = new Map(); for (const x of picks(d)) if (x.ref) v.set(x.ref, x.verdict);
+    b.ownerNotes = picks(d).filter((x) => x.verdict === "note").map((x) => x.text);
+    const { buildDesign } = await import("./design.mjs");
+    const r = await buildDesign({ d, board: b, verdicts: v, app, data: DATA });
+    const fig = `${BASE}/s/${b.id}/design/${basename(r.fig)}`;
+    const nb = read(d); nb.design = { state: "ready", rev: (nb.design?.rev ?? 0) + 1, fig: basename(r.fig), cards: r.cards, edit: PENCIL ? `${PENCIL}/?file=${encodeURIComponent(fig)}` : null, t: now() }; write(d, nb);
+    out({ ok: true, rev: nb.design.rev, cards: r.cards, missing_pictures: r.missing, fig, png: `${BASE}/s/${b.id}/design/board.png`, edit: PENCIL ? `${PENCIL}/?file=${encodeURIComponent(fig)}` : null, local: r.fig });
+    break;
+  }
+  case "focus": case "compare": {  // narrow the wall to a shortlist, or put two refs side by side for the owner to choose
+    const d = dir(pos[0]), b = read(d), ids = pos.slice(1);
+    if (ids[0] === "clear") { delete b[cmd]; write(d, b); out({ ok: true, [cmd]: null }); break; }
+    const known = new Set(b.refs.map((r) => r.id)), bad = ids.filter((i) => !known.has(i));
+    if (bad.length) die(`unknown ref ids: ${bad.join(" ")} (board.mjs status ${b.id})`);
+    if (cmd === "compare" && ids.length !== 2) die("compare needs exactly two ref ids");
+    if (!ids.length) die(`${cmd} needs ref ids, or clear`);
+    b[cmd] = { ids, why: opt("--why") ?? "", t: now() }; write(d, b); out({ ok: true, [cmd]: b[cmd] }); break;
+  }
   case "status": {
     const d = dir(pos[0]), b = read(d), p = picks(d), last = new Map();
     for (const x of p) if (x.ref) last.set(x.ref, x.verdict);
     const byRef = (v) => b.refs.filter((r) => last.get(r.id) === v).map((r) => ({ id: r.id, url: r.url, title: r.title, source: r.source }));
     out({ id: b.id, title: b.title, goal: b.goal, url: `${BASE}/s/${b.id}/`, techniques: b.techniques, palette: b.palette, type: b.type, refs: b.refs.length,
-      liked: byRef("like"), pinned: byRef("pin"), noped: byRef("nope"), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
+      liked: byRef("like"), pinned: byRef("pin"), noped: byRef("nope"), focus: b.focus ?? null, compare: b.compare ?? null, design: b.design ?? null,
+      all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
   }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;
   case "stop": try { execFileSync("pkill", ["-f", `${basename(fileURLToPath(import.meta.url))} serve`]); out({ stopped: true }); } catch { out({ stopped: false }); } break;

@@ -27,6 +27,23 @@ if (process.env.HISTORY) {
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// DESIGN=<edit url from `board.mjs design`>: the editor fetches the board's .fig and shows its layers, with no error.
+if (process.env.DESIGN) {
+  const bad = [], fig = [];
+  p.on("response", (r) => r.url().includes(".fig") && fig.push(r.status()));
+  p.on("console", (m) => /Web link|openFileFailed|Failed to open/i.test(m.text()) && bad.push(m.text()));
+  await p.goto(process.env.DESIGN, { timeout: 60000 });
+  // design.mjs wraps everything in one top-level frame named "board"; it shows in the layers panel once the file is open.
+  const leaf = () => [...document.querySelectorAll("body *")].some((e) => !e.children.length && e.textContent.trim() === "board");
+  await p.waitForFunction(leaf, null, { timeout: 60000 }).catch(() => bad.push("layer \"board\" never appeared in the editor"));
+  await p.getByRole("button", { name: "Start designing" }).click({ timeout: 3000 }).catch(() => {});  // first-run welcome modal
+  await p.waitForTimeout(3000);
+  const layers = await p.evaluate(leaf) ? 1 : 0;
+  console.log("design", JSON.stringify({ fig, layers }));
+  if (!fig.includes(200)) bad.push(`.fig fetch: ${JSON.stringify(fig)}`);
+  await p.screenshot({ path: `${out}/design-editor.png` });
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // BOARD=<board session url>: check the taste board instead (desktop + phone, live update lag, a pin round-trip), then exit.
 if (process.env.BOARD) {
   const { execFileSync } = await import("node:child_process");
@@ -43,6 +60,23 @@ if (process.env.BOARD) {
     console.log(name, JSON.stringify(await q.evaluate((lag) => ({ lagMs: lag, refs: document.querySelectorAll(".ref").length, pinned: document.querySelectorAll(".ref.pin").length, broken: [...document.querySelectorAll(".ref img")].filter((i) => i.complete && !i.naturalWidth).length, preview: !!document.querySelector("iframe.frame.in"), overflowX: document.documentElement.scrollWidth > innerWidth }), lag)));
     await q.click(".ref.pin .acts [data-v=pin]", { force: true }); await q.waitForTimeout(300);
   }
+  // Talk-to-choose UI: when the agent has set a shortlist and a pair, the wall narrows, the pair shows, key 1 picks.
+  // Run the server with TASTE_AGENT=off for this check, so pressing 1 does not start a Hermes session.
+  const st = JSON.parse(execFileSync(process.execPath, [cli, "status", id], { encoding: "utf8" }));
+  const ids = st.all.slice(0, 6).map((r) => r.id);
+  execFileSync(process.execPath, [cli, "focus", id, ...ids, "--why", "shot check"]);
+  execFileSync(process.execPath, [cli, "compare", id, ids[0], ids[1], "--why", "shot check pair"]);
+  const q = await b.newPage({ viewport: { width: 1600, height: 1000 } }); q.on("pageerror", (e) => errs.push(String(e)));
+  await q.goto(process.env.BOARD); await q.waitForSelector(".compare:not([hidden]) figure");
+  const ui = await q.evaluate(() => ({ refs: document.querySelectorAll(".ref").length, chip: document.querySelector(".filters .focus")?.textContent, pair: document.querySelectorAll(".compare figure").length, design: document.querySelector("#mkdesign")?.textContent, talk: !!document.querySelector("#sayText") }));
+  await q.screenshot({ path: `${out}/board-compare.png` });
+  await q.keyboard.press("1"); await q.waitForFunction((a) => document.querySelector(`.compare figure[data-id="${a}"].pin`), ids[0], { timeout: 4000 });
+  const picked = JSON.parse(execFileSync(process.execPath, [cli, "status", id], { encoding: "utf8" }));
+  ui.key1 = { pinned: picked.pinned?.some?.((r) => (r.id ?? r) === ids[0]) ?? null, noped: picked.noped?.some?.((r) => (r.id ?? r) === ids[1]) ?? null };
+  for (const c of ["focus", "compare"]) execFileSync(process.execPath, [cli, c, id, "clear"]);
+  for (const [r, v] of [[ids[0], "clear"], [ids[1], "clear"]]) await q.evaluate(([r, v]) => fetch("./pick", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: r, verdict: v }) }), [r, v]);
+  console.log("talk-ui", JSON.stringify(ui));
+  if (ui.refs !== 6 || ui.pair !== 2 || !ui.chip || !ui.design || !ui.talk) errs.push(`talk-ui assertions failed: ${JSON.stringify(ui)}`);
   console.log("errors:", JSON.stringify(errs)); await b.close(); process.exit(errs.length ? 1 : 0);
 }
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];

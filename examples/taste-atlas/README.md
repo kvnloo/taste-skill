@@ -27,6 +27,13 @@ live brainstorm boards at `/s/<id>/`). Board technique tags open the atlas at th
 post in the library has "+ Board" to drop it onto the newest board. A plain static server
 (`python3 -m http.server`) still renders the atlas alone.
 
+On a board, talk to it: the bar at the bottom (type, or hold **● Talk** / the space bar to dictate) goes
+to a Hermes session over ACP (`scripts/agent.mjs`; `TASTE_AGENT=off` disables it). Say "only the dark
+ones" and it narrows the wall to a shortlist; "compare the best two" puts a pair side by side and you
+pick with a click or `1`/`2`. **Make design** exports the kept references, techniques, palette and type as
+an editable `.fig` + PNG and links it into an OpenPencil editor (`TASTE_PENCIL_URL`; needs
+`@open-pencil/cli` on PATH or `TASTE_OPENPENCIL`). CLI equivalents: `board.mjs focus|compare|design`.
+
 Click a node to focus its branch, click again or press Esc to step out, `/` to search, `t` for the
 theme. Deep links work: `/#color-isolation`, `/?theme=dark#instrument-language`.
 

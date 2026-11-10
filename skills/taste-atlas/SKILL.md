@@ -54,6 +54,12 @@ keep it updated; the page refreshes within a second of each write. CLI: `scripts
 6. `design <id>` turns kept refs, techniques, palette and type into an editable `.fig` plus PNG and an
    OpenPencil edit link (`TASTE_PENCIL_URL`, a self-built OpenPencil; the hosted app predates `?file=`).
    He can also press "Make design" on the board. The file is his to edit, download and share.
+7. Directions: generate design options yourself with Hermes' `image_generate` tool (on the ChatGPT
+   subscription via the `openai-codex` provider), passing the `file` of his kept refs from `status` as
+   reference images. Add each with `image <id> <png> --title --note [--from <refIds>]`; the first of a
+   batch opens a new round, the rest take `--same-round`. Then `compare` the strongest two. To merge,
+   pass both pictures as references and add the result with `--from <a>,<b>`. Rounds stay on the board.
+   Needs `image_gen` in the `acp` platform toolsets of the Hermes profile (`platform_toolsets.acp`).
 
 The board's talk bar (typed, or held-to-talk via the browser's speech recognition) goes to a Hermes
 session over ACP (`scripts/agent.mjs`, one per board, `hermes acp`), which drives steps 2-6 itself.

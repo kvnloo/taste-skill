@@ -34,6 +34,12 @@ pick with a click or `1`/`2`. **Make design** exports the kept references, techn
 an editable `.fig` + PNG and links it into an OpenPencil editor (`TASTE_PENCIL_URL`; needs
 `@open-pencil/cli` on PATH or `TASTE_OPENPENCIL`). CLI equivalents: `board.mjs focus|compare|design`.
 
+**3 directions** (or just saying "give me options") has the Hermes session draw three different design
+directions with its own image tool, from the references you kept, and line them up as a round (R1, R2, …)
+above the wall; it then puts the strongest two side by side. "A's layout with B's colours" merges two.
+Rounds and their pictures live in the board directory (`variants/`). Hermes needs `image_gen` enabled
+for ACP: `platform_toolsets: { acp: [hermes-acp, image_gen] }` in its `config.yaml`.
+
 Click a node to focus its branch, click again or press Esc to step out, `/` to search, `t` for the
 theme. Deep links work: `/#color-isolation`, `/?theme=dark#instrument-language`.
 

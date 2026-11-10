@@ -5,7 +5,7 @@
 // $TASTE_OPENPENCIL overrides the CLI (default: `openpencil` on PATH, else `npx -y @open-pencil/cli@0.16.0`).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { techById } from "../src/brief.js";
 import { OPERATIONS } from "../src/taxonomy.js";
 const opById = Object.fromEntries(OPERATIONS.map((o) => [o.id, o]));
@@ -23,15 +23,22 @@ function op(args, opts = {}) {
   catch (e) { throw new Error(`openpencil ${args[0]} failed: ${(e.stderr || e.stdout || e.message).toString().trim().slice(-800)}`); }
 }
 
+/** The file behind an app-relative picture path (/data/…, /atlas/…, /s/<board>/variants/…), or null. */
+export function localImage(src, { app, data, boards }) {
+  if (!src) return null;
+  const p = src.startsWith("/data/") ? join(data, decodeURIComponent(src.slice(6)))
+    : src.startsWith("/atlas/") ? join(app, decodeURIComponent(src.slice(7)))
+    : src.startsWith("/s/") && /^\/s\/[a-z0-9-]+\/variants\/[\w.-]+$/.test(src) ? join(boards, src.slice(3)) : null;
+  return p && existsSync(p) ? p : null;
+}
+
 /** A board picture as a local JPEG no wider than 2*COL, plus its size. Returns null (and says why) when unavailable. */
-async function picture(ref, { app, data, work, i }) {
+async function picture(ref, { app, data, work, i, boards }) {
   const src = ref.image;
   if (!src) return null;
   const out = join(work, `img${i}.jpg`);
-  let input = null;
-  if (src.startsWith("/data/")) input = join(data, decodeURIComponent(src.slice(6)));
-  else if (src.startsWith("/atlas/")) input = join(app, decodeURIComponent(src.slice(7)));
-  else if (/^https?:\/\//.test(src)) {
+  let input = localImage(src, { app, data, boards });
+  if (!input && /^https?:\/\//.test(src)) {
     const r = await fetch(src, { signal: AbortSignal.timeout(20000) });
     if (!r.ok) { process.stderr.write(`design: picture ${r.status} ${src}\n`); return null; }
     input = join(work, `raw${i}`); writeFileSync(input, Buffer.from(await r.arrayBuffer()));
@@ -50,7 +57,7 @@ export async function buildDesign({ d, board, verdicts, app, data }) {
   const noped = new Set(board.refs.filter((r) => verdicts.get(r.id) === "nope").map((r) => r.id));
   const refs = (kept.length ? kept : board.refs.filter((r) => !noped.has(r.id))).slice(0, 24);
   const pics = [];
-  for (const [i, r] of refs.entries()) pics.push(await picture(r, { app, data, work: tmp, i }).catch((e) => { process.stderr.write(`design: ${r.url}: ${e.message}\n`); return null; }));
+  for (const [i, r] of refs.entries()) pics.push(await picture(r, { app, data, work: tmp, i, boards: dirname(d) }).catch((e) => { process.stderr.write(`design: ${r.url}: ${e.message}\n`); return null; }));
   const cards = refs.map((r, i) => ({ r, p: pics[i] })).filter((c) => c.p);
   const techs = board.techniques.map((t) => techById.get(t)).filter(Boolean);
   const notes = [...board.notes.filter((n) => n.who === "owner").map((n) => n.text), ...(board.ownerNotes ?? [])].slice(-6);

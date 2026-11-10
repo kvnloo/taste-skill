@@ -13,6 +13,7 @@
 //   board.mjs design <id>                         kept refs + direction -> editable .fig (OpenPencil/Figma) + PNG, link to edit
 //   board.mjs focus <id> <refIds...>|clear [--why] show only a shortlist (what a spoken filter becomes)
 //   board.mjs compare <id> <a> <b>|clear [--why]  two refs side by side; the owner picks one (keys 1 / 2)
+//   board.mjs image <id> <file> [--title] [--note] [--from a,b] [--same-round]   add a generated picture (a direction) in a round
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
 // The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
@@ -24,12 +25,13 @@
 // reuse-checked: scripts/atlas.mjs -- taxonomy CLI (reused via src/brief.js); sources.mjs -- builds atlas data offline.
 import { createServer } from "node:http";
 import { spawn, execFile, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync, cpSync, renameSync, watch, appendFileSync, openSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync, cpSync, renameSync, watch, appendFileSync, openSync, copyFileSync } from "node:fs";
 import { dirname, join, extname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { suggest, techById, techniqueRecord } from "../src/brief.js";
+import { localImage } from "./design.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
 const HOME = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
@@ -220,6 +222,7 @@ function serve() {
       const cors = PENCIL ? { "access-control-allow-origin": new URL(PENCIL).origin, vary: "origin" } : {};
       return file(res, f, f.endsWith(".fig") ? { ...cors, "content-disposition": `inline; filename="${basename(f)}"` } : cors);
     }
+    if (sub.startsWith("/variants/")) { const f = inside(join(d, "variants"), sub.slice(9)); return f ? file(res, f) : res.writeHead(403).end(); }
     if (sub.startsWith("/preview/")) { const f = inside(join(d, "preview"), sub.slice(8)); return f ? file(res, f.endsWith("/") || !extname(f) ? join(f, "index.html") : f, { "content-security-policy": "frame-ancestors 'self'" }) : res.writeHead(403).end(); }
     res.writeHead(404).end("not found");
   }).listen(PORT, "127.0.0.1", () => process.stderr.write(`taste board on ${LOCAL}\n`));
@@ -328,6 +331,20 @@ switch (cmd) {
     out({ ok: true, rev: nb.design.rev, cards: r.cards, missing_pictures: r.missing, fig, png: `${BASE}/s/${b.id}/design/board.png`, edit: PENCIL ? `${PENCIL}/?file=${encodeURIComponent(fig)}` : null, local: r.fig });
     break;
   }
+  case "image": {  // add a picture the agent generated (a design direction or a merge) as a ref in a numbered round
+    const d = dir(pos[0]), b = read(d), src = pos[1];
+    if (!src || !existsSync(src)) die(`image needs a local picture file (got ${src})`);
+    if (!/\.(png|jpe?g|webp)$/i.test(src)) die("image must be .png, .jpg or .webp");
+    const round = +(opt("--round") ?? 0) || (b.round ?? 0) + (has("--same-round") ? 0 : 1) || 1;
+    const from = (opt("--from") ?? "").split(",").filter(Boolean), known = new Set(b.refs.map((r) => r.id));
+    const bad = from.filter((i) => !known.has(i)); if (bad.length) die(`unknown --from ref ids: ${bad.join(" ")}`);
+    mkdirSync(join(d, "variants"), { recursive: true });
+    const k = b.refs.filter((r) => r.source === "variant" && r.round === round).length + 1, name = `r${round}-${k}${extname(src).toLowerCase()}`;
+    copyFileSync(src, join(d, "variants", name));
+    const ref = { id: randomBytes(4).toString("hex"), url: `${BASE}/s/${b.id}/variants/${name}`, image: `/s/${b.id}/variants/${name}`, title: opt("--title") ?? `Round ${round} · ${String.fromCharCode(64 + k)}`,
+      text: (opt("--note") ?? "").slice(0, 280), source: "variant", round, from, t: now() };
+    b.refs.push(ref); b.round = Math.max(b.round ?? 0, round); write(d, b); out({ ok: true, ref }); break;
+  }
   case "focus": case "compare": {  // narrow the wall to a shortlist, or put two refs side by side for the owner to choose
     const d = dir(pos[0]), b = read(d), ids = pos.slice(1);
     if (ids[0] === "clear") { delete b[cmd]; write(d, b); out({ ok: true, [cmd]: null }); break; }
@@ -343,7 +360,7 @@ switch (cmd) {
     const byRef = (v) => b.refs.filter((r) => last.get(r.id) === v).map((r) => ({ id: r.id, url: r.url, title: r.title, source: r.source }));
     out({ id: b.id, title: b.title, goal: b.goal, url: `${BASE}/s/${b.id}/`, techniques: b.techniques, palette: b.palette, type: b.type, refs: b.refs.length,
       liked: byRef("like"), pinned: byRef("pin"), noped: byRef("nope"), focus: b.focus ?? null, compare: b.compare ?? null, design: b.design ?? null,
-      all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
+      all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, round: r.round, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null, file: localImage(r.image, { app, data: DATA, boards: HOME }) ?? (/^https?:/.test(r.image ?? "") ? r.image : null) })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
   }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;
   case "stop": try { execFileSync("pkill", ["-f", `${basename(fileURLToPath(import.meta.url))} serve`]); out({ stopped: true }); } catch { out({ stopped: false }); } break;

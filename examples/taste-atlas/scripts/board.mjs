@@ -17,6 +17,7 @@
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
 // The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
+//   The atlas links a post to a Work node with POST /api/work-links {item, node, op: add|remove} ($ATLAS_DATA/work-links.json).
 // Sessions: $TASTE_BOARD_HOME (default ~/.cache/taste-board/<id>/), pruned after 7 days idle.
 // Server: 127.0.0.1:$TASTE_BOARD_PORT (8789). $TASTE_BOARD_URL = the address to print instead (e.g. a tailnet URL).
 // Public search: Exa's keyless MCP (https://mcp.exa.ai/mcp, override $TASTE_SEARCH_MCP); pictures from the page's

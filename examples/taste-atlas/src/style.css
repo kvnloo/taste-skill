@@ -129,3 +129,5 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 
 /* Phone header: dot + view switcher + search + theme must fit 360px. */
 @media (max-width: 700px) { .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 auto; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } #hits { width: min(280px, calc(100vw - 24px)); } }
+.bm-video-dock { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.bm-video-dock video { position: absolute; left: 0; top: 0; object-fit: cover; visibility: hidden; will-change: transform; background: #000; }

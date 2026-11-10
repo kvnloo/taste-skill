@@ -70,7 +70,48 @@ export async function mountBookmarks(A, { go }) {
   fetch("./data/sprite.json").then((r) => (r.ok ? r.json() : null)).then(async (m) => {
     if (!m) return; S = m.size; m.ids.forEach((id, i) => spriteAt.set(id, [(i % m.cols) * S, Math.floor(i / m.cols) * S]));
     sprite = await loadImg("./data/sprite.jpg"); dirty++;
-  }).catch(() => {});
+  }).catch((e) => console.error("sprite:", e));
+  // Deep zoom (gigapixel-style level of detail): 64px sprite -> 480px thumb -> <=1600px still, each fetched only when a
+  // tile is big enough on screen to need it, decoded off the main thread (createImageBitmap) so zooming never stalls.
+  let hires = {};
+  fetch("./data/hires.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).then((m) => { hires = m; dirty++; }).catch((e) => console.error("hires:", e));
+  const bitmap = (src) => fetch(src).then((r) => { if (!r.ok) throw new Error(`${r.status} ${src}`); return r.blob(); }).then((b) => createImageBitmap(b));
+  const big = new Map(); // tile -> ImageBitmap of the <=1600px still; least recently drawn are closed past BIG_MAX
+  const BIG_MAX = innerWidth <= 700 ? 12 : 40; // ~40 tiles of 240+ css px fit a desktop screen: never evict what is visible
+  const useBig = (t) => { const im = big.get(t); big.delete(t); big.set(t, im); while (big.size > BIG_MAX) { const [k, v] = big.entries().next().value; big.delete(k); v?.close?.(); k.big = null; } };
+  // Videos autoplay on the canvas: muted 4 s loops (480px, local) for the few largest video tiles nearest the centre.
+  // A small fixed pool of <video> elements is reused and laid over their tiles, so the compositor plays them and the
+  // canvas never repaints for a video frame: the cost stays bounded however many posts are on screen.
+  const POOL = innerWidth <= 700 ? 2 : 4, MIN_PX = 72;
+  // Self-tuning: every second compare the frame rate with clips playing to the rate with none; if clips cost more than
+  // 20%, play one fewer (never below 1). Machines with hardware decode keep all of them, slow ones settle without lag.
+  let limit = POOL, fps0 = 60, win = { t: 0, n: 0 };
+  function tune(now) {
+    if (!win.t) win.t = now; win.n++;
+    if (now - win.t < 1000) return;
+    const fps = (win.n * 1000) / (now - win.t), live = [...playing.values()].filter((v) => !v.paused).length; win = { t: now, n: 0 };
+    if (!live) fps0 = Math.max(fps0 * 0.9, fps); // track the no-video baseline (decays so a busy start does not stick)
+    else if (fps < fps0 * 0.8 && limit > 1) { limit = Math.min(limit, live) - 1; dirty++; console.info(`taste: ${fps.toFixed(0)} fps with ${live} clips (baseline ${fps0.toFixed(0)}), playing at most ${limit}`); }
+  }
+  const dock = document.createElement("div"); dock.className = "bm-video-dock"; cv.after(dock);
+  const pool = Array.from({ length: POOL }, () => {
+    const v = Object.assign(document.createElement("video"), { muted: true, loop: true, playsInline: true, preload: "auto" });
+    v.setAttribute("muted", ""); v.setAttribute("playsinline", ""); dock.appendChild(v);
+    v.onplaying = () => { dirty++; };
+    v.onerror = () => { if (v.tile) { console.error("clip failed:", v.currentSrc); v.tile.clipBad = true; } };
+    return v;
+  });
+  const playing = new Map(); // tile -> video
+  function assignVideos(cands) {
+    const want = new Set(cands.slice(0, limit));
+    for (const [t, v] of playing) if (!want.has(t)) { v.pause(); v.style.visibility = "hidden"; v.removeAttribute("src"); v.load(); v.tile = null; playing.delete(t); }
+    for (const t of want) {
+      if (playing.has(t)) continue;
+      const v = pool.find((x) => !x.tile); if (!v) break;
+      v.tile = t; v.src = "./data/" + hires[t.b.id].clip; playing.set(t, v);
+      v.play().catch((e) => { if (e.name !== "AbortError") console.error("autoplay:", e.message); });
+    }
+  }
 
   let key = "", lit = null, litFor = null;
   function paint() {
@@ -98,17 +139,37 @@ export async function mountBookmarks(A, { go }) {
       for (const t of tiles) if (t.id === fanTech.id) { ctx.moveTo(fanTech.x, fanTech.y); ctx.lineTo(t.x, t.y); }
       ctx.stroke();
     }
-    let budget = 12;
+    // Pick each tile's level from its size in device pixels: sprite until 64, thumb until 480, then the hi-res still.
+    let budget = 12, bigBudget = 3;
+    const dp = px * dpr, cands = [];
+    const crop = (im, x, y, w = im.width, h = im.height) => { const m = Math.min(w, h); ctx.drawImage(im, (w - m) / 2, (h - m) / 2, m, m, x, y, T, T); };
     for (const t of tiles) {
       if (t.x < vx0 || t.x > vx1 || t.y < vy0 || t.y > vy1) continue;
-      ctx.globalAlpha = !lit || lit.has(t.id) ? 1 : 0.06;
-      const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id);
-      if ((px > 90 || (!sp && px >= 6)) && ctx.globalAlpha === 1 && !t.full && budget-- > 0) { t.full = "loading"; loadImg("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, () => (t.full = "error")); }
-      if (t.full instanceof Image) { const im = t.full, m = Math.min(im.width, im.height); ctx.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, x, y, T, T); }
+      const on = !lit || lit.has(t.id);
+      ctx.globalAlpha = on ? 1 : 0.06;
+      const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id), h = hires[t.b.id];
+      if (on && (dp > 180 || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
+      if (on && dp > 520 && px > 240 && h?.full && !t.big && bigBudget-- > 0) { t.big = "loading"; bitmap("./data/" + h.full).then((im) => { t.big = im; big.set(t, im); useBig(t); dirty++; }, (e) => { t.big = "error"; console.error("still:", e.message); }); }
+      if (on && px >= MIN_PX && h?.clip && !t.clipBad) cands.push(t);
+      const v = playing.get(t);
+      if (t.big instanceof ImageBitmap && dp > 480) { useBig(t); crop(t.big, x, y); }
+      else if (t.full instanceof ImageBitmap) crop(t.full, x, y);
       else if (sprite && sp && px >= 3) ctx.drawImage(sprite, sp[0], sp[1], S, S, x, y, T, T);
       else { ctx.fillStyle = t.b.rgb ?? opById[t.op].color; ctx.fillRect(x, y, T, T); }
+      if (h?.clip && on && px >= 28 && !v) { // small play mark so you can see which tiles move before they start
+        ctx.globalAlpha = 0.85; ctx.fillStyle = "#000"; const r = Math.min(T * 0.12, 9 / c.s); ctx.beginPath(); ctx.arc(x + T - r * 1.6, y + r * 1.6, r, 0, 7); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(x + T - r * 1.95, y + r * 1.15); ctx.lineTo(x + T - r * 1.95, y + r * 2.05); ctx.lineTo(x + T - r * 1.15, y + r * 1.6); ctx.fill();
+      }
     }
-    if (budget < 0) dirty++; // more pictures to start next frame
+    if (budget < 0 || bigBudget < 0) dirty++; // more pictures to start next frame
+    const mx = W / 2, my = H / 2, sx = (t) => ox + (t.x - c.x) * c.s - mx, sy = (t) => oy + (t.y - c.y) * c.s - my;
+    cands.sort((a, b) => Math.hypot(sx(a), sy(a)) - Math.hypot(sx(b), sy(b)));
+    assignVideos(cands);
+    for (const [t, v] of playing) { // lay each playing clip exactly over its tile (CSS px)
+      const ready = v.readyState >= 2 && !v.paused;
+      v.style.visibility = ready ? "visible" : "hidden";
+      if (ready) { v.style.width = v.style.height = px + "px"; v.style.transform = `translate(${ox + (t.x - T / 2 - c.x) * c.s}px,${oy + (t.y - T / 2 - c.y) * c.s}px)`; }
+    }
     if (hoverTile) { ctx.globalAlpha = 1; ctx.strokeStyle = dark ? "#ece8df" : "#1b1a17"; ctx.lineWidth = 3 / c.s; ctx.strokeRect(hoverTile.x - T / 2, hoverTile.y - T / 2, T, T); }
     ctx.globalAlpha = 1;
   }
@@ -233,8 +294,12 @@ export async function mountBookmarks(A, { go }) {
   });
   addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") toggleWide(); });
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
-  (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } paint(); requestAnimationFrame(poll); })();
+  (function poll(now) {
+    if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); }
+    tune(now);
+    paint(); requestAnimationFrame(poll);
+  })(0);
   draw(); go(A.view.focus, 600);
   function setQuery(q) { q = q.trim(); if (q === query) return; query = q; if (q) open = true; shown = wide ? 180 : 60; draw(); }
-  return { setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
+  return { lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2) })), big: big.size, hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

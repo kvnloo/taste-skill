@@ -20,6 +20,8 @@ function region() {
 // Deeper zooms leave room for side labels (technique names sit beside their node).
 const fitR = (id) => A.fit(id, phone() ? ((A.graph.byId.get(id)?.level ?? 0) >= 3 ? 0.72 : 0.94) : 0.82, region());
 const params = new URLSearchParams(location.search);
+// Deep zoom: far enough that one post fills the screen at full resolution (tiles are 44 world units).
+const MAX_ZOOM = 24;
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 let tween = null;
@@ -51,7 +53,7 @@ const touches = new Map(); let pinch = null, swallowTap = false;
 svg.addEventListener("pointerdown", (e) => { touches.set(e.pointerId, e); if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cam: { ...A.view.cam } }; drag = null; return; } });
 svg.addEventListener("pointermove", (e) => {
   if (!touches.has(e.pointerId)) return; touches.set(e.pointerId, e);
-  if (pinch && touches.size === 2) { const [a, b] = [...touches.values()]; tween = null; A.view.cam = { ...pinch.cam, s: Math.min(4, Math.max(0.12, pinch.cam.s * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d)) }; }
+  if (pinch && touches.size === 2) { const [a, b] = [...touches.values()]; tween = null; A.view.cam = { ...pinch.cam, s: Math.min(MAX_ZOOM, Math.max(0.12, pinch.cam.s * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d)) }; }
 });
 const endTouch = (e) => { touches.delete(e.pointerId); if (touches.size < 2 && pinch) { pinch = null; drag = null; swallowTap = true; } if (!touches.size) setTimeout(() => (swallowTap = false)); };
 svg.addEventListener("pointerup", endTouch); svg.addEventListener("pointercancel", endTouch);
@@ -76,7 +78,7 @@ svg.addEventListener("pointerup", (e) => {
 });
 svg.addEventListener("wheel", (e) => {
   e.preventDefault(); tween = null;
-  const c = A.view.cam, k = Math.exp(-e.deltaY * 0.0015), s = Math.min(4, Math.max(0.12, c.s * k));
+  const c = A.view.cam, k = Math.exp(-e.deltaY * 0.0015), s = Math.min(MAX_ZOOM, Math.max(0.12, c.s * k));
   const ox = c.cx ?? innerWidth / 2, oy = c.cy ?? innerHeight / 2, mx = (e.clientX - ox) / c.s + c.x, my = (e.clientY - oy) / c.s + c.y;
   A.view.cam = { ...c, s, x: mx - (e.clientX - ox) / s, y: my - (e.clientY - oy) / s };
 }, { passive: false });

@@ -71,11 +71,16 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     return null;
   };
   const cover = (im, x, y, w, h) => { const k = Math.max(w / im.width, h / im.height), sw = w / k, sh = h / k; ctx.drawImage(im, (im.width - sw) / 2, (im.height - sh) / 2, sw, sh, x, y, w, h); };
-  let key = "", focus = undefined, hover = null, ends = [], endsKey = ""; // focus: undefined = not in the Work layer, null = portfolio, else a node id
+  let key = "", focus = undefined, hover = null, ends = [], endsKey = "", shown = null, blank = false; // focus: undefined = not in the Work layer, null = portfolio, else a node id
+  const fits = new Map(); // truncated labels, by text, font and room on screen (measureText every frame showed in profiles)
   const text = (s, x, y, px, c, { weight = 500, align = "center", font = "Inter, sans-serif", max } = {}) => {
-    const sc = A.view.cam.s; ctx.font = `${weight} ${px / sc}px ${font}`; ctx.textAlign = align; ctx.fillStyle = c;
-    let t = String(s); if (max) while (t.length > 3 && ctx.measureText(t).width > max) t = t.slice(0, -2) + "…";
-    ctx.fillText(t, x, y);
+    const sc = A.view.cam.s; let t = String(s);
+    if (max) {
+      const room = Math.round((max * sc) / 4) * 4, k = `${t}|${weight} ${px}px ${font}|${room}`;
+      if (!fits.has(k)) { ctx.font = `${weight} ${px}px ${font}`; let u = t; while (u.length > 3 && ctx.measureText(u).width > room) u = u.slice(0, -2) + "…"; fits.set(k, u); }
+      t = fits.get(k);
+    }
+    ctx.font = `${weight} ${px / sc}px ${font}`; ctx.textAlign = align; ctx.fillStyle = c; ctx.fillText(t, x, y);
   };
 
   function paint(t) {
@@ -83,13 +88,17 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     if (anim && t - anim > 480) { anim = null; dirty++; }
     const k = `${vis},${c.x.toFixed(1)},${c.y.toFixed(1)},${c.s.toFixed(4)},${c.cx},${c.cy},${Wd},${Hd},${A.view.theme},${dirty},${hover},${focus},${anim ? t : 0}`;
     if (k === key) return; key = k;
-    document.body.classList.toggle("work-on", vis); hud.hidden = !vis || focus === undefined;
+    const hh = !vis || focus === undefined; // DOM writes only on change: an attribute write per frame costs a style recalc
+    if (vis !== shown) document.body.classList.toggle("work-on", (shown = vis)); if (hud.hidden !== hh) hud.hidden = hh;
     if (cv.width !== Math.round(Wd * dpr) || cv.height !== Math.round(Hd * dpr)) { cv.width = Math.round(Wd * dpr); cv.height = Math.round(Hd * dpr); }
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
-    if (!vis) return;
     const s = c.s, ox = c.cx ?? Wd / 2, oy = c.cy ?? Hd / 2, px = (r) => r * s;
     const vx0 = c.x - ox / s, vy0 = c.y - oy / s, vx1 = c.x + (Wd - ox) / s, vy1 = c.y + (Hd - oy) / s;
     const seen = (o, m = 0) => o.x + o.r + m > vx0 && o.x - o.r - m < vx1 && o.y + o.r + m > vy0 && o.y - o.r - m < vy1;
+    // Off screen (browsing techniques far from the centre): leave the canvas blank and untouched, so it costs no raster.
+    const want = vis && (seen({ x: 0, y: 0, r: R + 20 }) || focus !== undefined);
+    if (!want && blank) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); blank = !want;
+    if (!want) return;
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox - c.x * s), dpr * (oy - c.y * s));
     const ink = dark ? "#ece8df" : "#1b1a17", mute = dark ? "#8f8a80" : "#8a857a", bg = dark ? "#0f1314" : "#f4f2ed", lw = (p) => p / s;
     // Inspo ↔ work edges: a faint bundle from each node to its posts' tiles on the ring; the focused node's are strong.
@@ -144,10 +153,12 @@ export async function mountWork(A, { bm, fly, start = "" }) {
         if (!tiles) {
           if (qr >= 14) text(label, q.x, q.y + lw(qr >= 40 ? -3 : 4), Math.min(14, Math.max(9, qr * 0.24)), ink, { weight: 600, max: q.r * 1.85 });
           if (qr >= 40 && !kd.linked) text(n.also.length ? `also in ${n.also.map((a) => P.get(a)?.name ?? a).join(", ")}` : ST[n.status.value]?.[0] ?? "", q.x, q.y + lw(11), 10, n.also.length ? mute : cs, { max: q.r * 1.8 });
+          if (qr >= 70 && !kd.linked) text(fresh(n.status), q.x, q.y + lw(24), 9, stale(n.status) ? ST["at-risk"][dark ? 2 : 1] : mute, { font: '"IBM Plex Mono", monospace', max: q.r * 1.7 });
           continue;
         }
         text(label, q.x, q.y - q.r * 0.68, Math.min(15, qr * 0.09), ink, { weight: 600, max: q.r * 1.3 });
         if (!kd.linked) text(`${n.status.why}${n.also.length ? ` · also in ${n.also.map((a) => P.get(a)?.name ?? a).join(", ")}` : ""}`, q.x, q.y - q.r * 0.68 + lw(14), 10, mute, { max: q.r * 1.5 });
+        if (!kd.linked) text(`${ST[n.status.value]?.[0] ?? n.status.value} · ${fresh(n.status)}`, q.x, q.y - q.r * 0.68 + lw(27), 10, stale(n.status) ? ST["at-risk"][dark ? 2 : 1] : cs, { font: '"IBM Plex Mono", monospace', max: q.r * 1.5 });
         for (const tl of tilesOf(kd.key, q)) {
           const tw = px(tl.w), x = tl.x, y = tl.y, w = tl.w, h = tl.h; if (x > vx1 || x + w < vx0 || y > vy1 || y + h < vy0) continue;
           ctx.globalAlpha = 1; ctx.fillStyle = dark ? "#22282b" : "#e4e0d6"; ctx.fillRect(x, y, w, h);
@@ -330,5 +341,5 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
   (function loop(t) { paint(t); requestAnimationFrame(loop); })(performance.now());
   if (start) setTimeout(() => fromHash(start), 650); // after the opening zoom
-  return { focus: focusOn, blur, find, proof, links: () => links, loaded: () => [...imgs.values()].filter((v) => v instanceof ImageBitmap).length, tethers: () => ends.map(([, tl, node]) => ({ item: tl.b.id, node })), layout: () => L, state: () => ({ focus, asOf, hl, visible: on(), hover }), data: W, hit: (x, y) => hit(...toWorld(x, y)), screen: (id) => { const o = L.get(id), c = A.view.cam; return o && { x: (c.cx ?? innerWidth / 2) + (o.x - c.x) * c.s, y: (c.cy ?? innerHeight / 2) + (o.y - c.y) * c.s, r: o.r * c.s }; } };
+  return { focus: focusOn, blur, find, proof, redraw: () => dirty++, links: () => links, loaded: () => [...imgs.values()].filter((v) => v instanceof ImageBitmap).length, tethers: () => ends.map(([, tl, node]) => ({ item: tl.b.id, node })), layout: () => L, state: () => ({ focus, asOf, hl, visible: on(), hover }), data: W, hit: (x, y) => hit(...toWorld(x, y)), screen: (id) => { const o = L.get(id), c = A.view.cam; return o && { x: (c.cx ?? innerWidth / 2) + (o.x - c.x) * c.s, y: (c.cy ?? innerHeight / 2) + (o.y - c.y) * c.s, r: o.r * c.s }; } };
 }

@@ -1,0 +1,46 @@
+/* Film overlays. The stage is a fixed-size frame (set by film.js from ?cut=). */
+body.film { background: #0b0b0a; }
+#stage { position: fixed; left: 0; top: 0; overflow: hidden; background: var(--bg); }
+#stage #atlas { position: absolute; inset: 0; }
+body.film #card { position: absolute; transition: none; box-shadow: 0 30px 80px rgba(0, 0, 0, .14); }
+.wall { position: absolute; inset: 0; pointer-events: none; }
+.wall .tile { position: absolute; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, .10); }
+.wall .tile svg { display: block; width: 100%; height: 100%; }
+#fx { position: absolute; inset: 0; pointer-events: none; }
+.callout { position: absolute; background: #fff; color: #14130f; border-radius: 22px; padding: 26px 30px; box-shadow: 0 30px 90px rgba(0, 0, 0, .18); font: 800 52px/1.0 Inter; letter-spacing: -.045em; }
+.callout em { font: italic 400 60px/1 "Instrument Serif", serif; letter-spacing: -.01em; }
+.title { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 9%; background: #f2f0eb; color: #14130f; }
+.title h1 { font: 800 150px/0.9 Inter; letter-spacing: -.065em; margin: 0; }
+.title h1 em { font: italic 400 160px/0.9 "Instrument Serif", serif; letter-spacing: -.02em; }
+.title p { font: 500 30px/1.25 Inter; letter-spacing: -.02em; margin: 26px 0 0; color: #5d5a52; }
+.caption { position: absolute; left: 6%; right: 6%; top: 5.5%; font: 800 46px/1.02 Inter; letter-spacing: -.045em; color: var(--ink); }
+.caption small { display: block; font: 500 15px "IBM Plex Mono", monospace; letter-spacing: .14em; color: var(--mute); margin-bottom: 12px; text-transform: uppercase; }
+.term { position: absolute; background: #14130f; color: #ece8df; border-radius: 18px; padding: 0 0 22px; font: 24px/1.55 "IBM Plex Mono", monospace; box-shadow: 0 30px 90px rgba(0, 0, 0, .25); overflow: hidden; }
+.term .bar { height: 42px; display: flex; gap: 9px; align-items: center; padding: 0 18px; border-bottom: 1px solid #2a2925; margin-bottom: 18px; }
+.term .bar i { width: 12px; height: 12px; border-radius: 50%; background: #3a3833; }
+.term .ln { padding: 0 28px; white-space: pre; }
+.term .o { color: #ff6b3d; }
+.term .m { color: #8f8a80; }
+.site { position: absolute; background: #efe6d8; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 90px rgba(0, 0, 0, .22); color: #2a211d; }
+.site .nav { display: flex; justify-content: space-between; padding: 22px 30px; font: 500 16px Inter; border-bottom: 1px solid #d9c9b2; }
+.site h2 { font: italic 400 92px/0.92 "Instrument Serif", serif; margin: 46px 30px 18px; letter-spacing: -.01em; }
+.site p { font: 17px/1.5 Inter; margin: 0 30px; color: #6b5a4d; max-width: 70%; }
+.site .sw { display: flex; gap: 12px; margin: 30px; }
+.site .sw b { flex: 1; height: 70px; border-radius: 10px; }
+.site .tag { position: absolute; right: 22px; top: 76px; font: 12px "IBM Plex Mono", monospace; letter-spacing: .1em; background: #2a211d; color: #efe6d8; padding: 6px 10px; border-radius: 6px; }
+.beat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 800 190px/0.88 Inter; letter-spacing: -.07em; text-align: center; }
+.beat em { font: italic 400 200px/0.88 "Instrument Serif", serif; letter-spacing: -.02em; }
+.end { position: absolute; inset: 0; background: #f2f0eb; color: #14130f; display: flex; flex-direction: column; justify-content: center; padding: 0 9%; }
+.end h1 { font: 800 130px/0.9 Inter; letter-spacing: -.065em; margin: 0; }
+.end h1 em { font: italic 400 140px/0.9 "Instrument Serif", serif; letter-spacing: -.02em; }
+.end p { font: 500 30px/1.25 Inter; letter-spacing: -.02em; color: #5d5a52; margin: 22px 0 34px; max-width: 80%; }
+.end .pill { align-self: flex-start; background: #14130f; color: #f2f0eb; border-radius: 999px; padding: 18px 30px; font: 500 26px "IBM Plex Mono", monospace; }
+.end .fine { position: absolute; bottom: 6%; left: 9%; font: 500 18px "IBM Plex Mono", monospace; letter-spacing: .08em; color: #8a857a; }
+.end .dots { display: flex; gap: 10px; margin-bottom: 30px; }
+.end .dots i { width: 18px; height: 18px; border-radius: 50%; }
+.cursor { position: absolute; width: 28px; height: 28px; }
+body.film .card .preview svg { aspect-ratio: auto; height: 200px; }
+body.film .card .v { font-size: 20px; } body.film .card .v em { font-size: 26px; } body.film .card .k { font-size: 12px; } body.film .card .mech { font-size: 15px; }
+body.cut-reel .card .preview { display: none; }
+.caption { isolation: isolate; }
+.caption::before { content: ""; position: absolute; left: -12%; right: -12%; top: -300px; bottom: -110px; background: linear-gradient(var(--bg) 84%, transparent); z-index: -1; }

@@ -132,6 +132,9 @@ if (process.env.WORK) {
   await q.click('.layers [data-layer="work"]'); await q.waitForTimeout(200); const back = await q.evaluate(() => window.__atlas.work.state().visible);
   log("toggle", { off, back }); if (off || !back) bad.push("layer toggle did not hide/show Work");
   await q.evaluate((id) => fetch("/api/work-links", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ item: id, node: "glide/taste", op: "remove" }) }), item);
+  // Stale renders as stale: push hermes-tern's last check two days back; its ring goes grey and dashed, its label says so.
+  await q.evaluate(() => { const w = window.__atlas.work, p = w.data.products.find((x) => x.id === "hermes-tern"); p.status.checked -= 2 * 86400; w.focus(null); w.redraw(); });
+  await q.waitForTimeout(1200); await q.screenshot({ path: `${out}/work-stale-check-dark.png` });
   // Light theme, and a phone (390 px): no horizontal scroll, the HUD and lightbox fit.
   const lq = await pg({ viewport: { width: 1440, height: 900 } }, "light");
   await lq.evaluate(() => window.__atlas.work.focus("glide")); await lq.waitForTimeout(1400); await lq.screenshot({ path: `${out}/work-1-glide-light.png` });

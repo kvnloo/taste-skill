@@ -57,13 +57,15 @@ Items are placed on techniques only from `--labels` (`{id, techniques, seen}` pe
 teacher labeller in `products/taste` run on these items); unlabelled items stay off the ring and list
 under "All". The owner's asks and films come from `products/taste/scripts/export_owner_sources.py`.
 
-### Watch and listen history
+### Watch, listen and build history
 
-Import what you keep coming back to on YouTube, Spotify and TIDAL. Each service gets its own chip in the
-library and its items are searchable from boards (`board.mjs search … --from mine`).
+Import what you keep coming back to on YouTube, Spotify and TIDAL, and your GitHub activity. **History**
+(`/history`) draws one card per source: a day-by-day calendar for every year it covers, the top
+channels/artists/languages, and covers of what you returned to. Each source also gets its own chip in the
+library (`/library?layer=<source>`) and its items are searchable from boards (`board.mjs search … --from mine`).
 
 ```sh
-node scripts/history.mjs <export>... [--top 300]
+node scripts/history.mjs <export>... [--github <user>] [--top 300]
 ```
 
 | Service | Where to get the export | What counts |
@@ -71,6 +73,7 @@ node scripts/history.mjs <export>... [--top 300]
 | YouTube | [Google Takeout](https://takeout.google.com) → *My Activity* → YouTube (`MyActivity.html` or `.json`) | likes and videos watched 2+ times; dislikes dropped |
 | Spotify | [Account privacy](https://www.spotify.com/account/privacy/) → *Extended streaming history* (`Streaming_History_Audio_*.json`) or *Account data* (`StreamingHistory_music_*.json`) | tracks played 2+ times (30 s+), ranked by minutes |
 | TIDAL | TIDAL's data request, or a CSV from TuneMyMusic/Soundiiz (any CSV with title and artist columns) | play counts, or every saved track |
+| GitHub | nothing to export: `--github <user>` reads through your `gh` login | contribution calendar since the account opened; starred repos as items; languages of your own repos |
 
 The format is detected from the file. Covers come from YouTube's poster frame, Spotify's oEmbed, or
 Apple's public catalogue search for TIDAL and other CSVs (no logins). Output goes to
@@ -88,6 +91,10 @@ builder (`src/brief.js`) backs the card's "Copy site brief" / "Component brief" 
 
 `node scripts/shot.mjs <dir>` screenshots key states, runs the feature journeys and asserts the
 canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
+`HISTORY=1 node scripts/shot.mjs <dir>` checks `/history` on desktop and phone (a card per source, calendars
+drawn, every cover loads). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
+at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
+native-size clips; a photo's detail view opens at its original width.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
 it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
 

@@ -7,6 +7,26 @@ const out = process.argv[2] ?? ".";
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// HISTORY=1: check /history (desktop + phone): one card per imported source, calendars drawn, covers load, no errors.
+if (process.env.HISTORY) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
+  for (const [name, vp] of [["history-desk", { width: 1440, height: 900 }], ["history-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+    await q.goto(`${base}/history?theme=dark`); await q.waitForSelector(".hcard canvas", { timeout: 15000 });
+    await q.waitForFunction(() => [...document.querySelectorAll(".covers img")].every((i) => i.complete), null, { timeout: 20000 }).catch(() => bad.push(`${name}: covers never finished loading`));
+    const r = await q.evaluate(async () => {
+      const want = Object.keys((await (await fetch("/data/history.atlas.json")).json()).series);
+      return { want, cards: [...document.querySelectorAll(".hcard")].map((c) => ({ src: c.querySelector(".cal").dataset.s, w: c.querySelector("canvas").width, imgs: c.querySelectorAll(".covers img").length,
+        broken: [...c.querySelectorAll(".covers img")].filter((i) => !i.complete || !i.naturalWidth).length })) };
+    });
+    console.log(name, JSON.stringify(r));
+    if (r.cards.length !== r.want.length) bad.push(`${name}: ${r.cards.length} cards for ${r.want.length} sources`);
+    for (const c of r.cards) { if (!c.w) bad.push(`${name}: ${c.src} calendar empty`); if (!c.imgs) bad.push(`${name}: ${c.src} no covers`); if (c.broken) bad.push(`${name}: ${c.src} ${c.broken} broken covers`); }
+    await q.screenshot({ path: `${out}/${name}.png`, fullPage: name.endsWith("desk") });
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // BOARD=<board session url>: check the taste board instead (desktop + phone, live update lag, a pin round-trip), then exit.
 if (process.env.BOARD) {
   const { execFileSync } = await import("node:child_process");

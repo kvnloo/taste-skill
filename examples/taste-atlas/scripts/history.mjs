@@ -81,7 +81,7 @@ function spotify(file, text) {
 }
 
 // Minimal RFC 4180 CSV: quoted fields, doubled quotes, commas and newlines inside quotes.
-function csvRows(text) {
+export function csvRows(text) {
   const rows = [[]]; let f = "", q = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];

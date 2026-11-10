@@ -150,6 +150,7 @@ function serve() {
     if (u.pathname === "/" || u.pathname === "/library") return file(res, join(app, "index.html"));
     if (u.pathname === "/boards") return file(res, join(app, "boards.html"));
     if (u.pathname === "/history") return file(res, join(app, "history.html"));
+    if (u.pathname === "/network") return file(res, join(app, "network.html"));
     if (u.pathname === "/api/boards") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(boardList())); return; }
     if (u.pathname === "/atlas" || u.pathname === "/atlas/" || u.pathname === "/atlas/index.html") { res.writeHead(301, { location: "/" + u.search }).end(); return; }
     if (u.pathname.startsWith("/atlas/")) { const f = inside(app, u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }

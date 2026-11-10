@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="referrer" content="no-referrer" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taste · Network</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+<link rel="stylesheet" href="/src/nav.css" />
+<style>
+  #graph { position: fixed; inset: 0; cursor: grab; }
+  #card:empty { display: none; }
+  #card { max-height: calc(100vh - 150px); overflow: auto; width: 330px; }
+  #card h2 { font: 600 18px Inter; margin: 0 0 2px; letter-spacing: -.01em; }
+  #card h2 em { font: italic 400 22px "Instrument Serif", serif; }
+  #card .sub { color: var(--mute); font-size: 12px; margin-bottom: 10px; }
+  #card .path { font: 500 12px "IBM Plex Mono", monospace; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; margin: 8px 0; }
+  #card .path b { color: var(--ink); }
+  #card h3 { font: 10px "IBM Plex Mono", monospace; letter-spacing: .12em; color: var(--mute); margin: 12px 0 4px; text-transform: uppercase; }
+  #card .p { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); cursor: pointer; }
+  #card .p:last-child { border-bottom: 0; }
+  #card .p span { font-size: 13px; font-weight: 500; } #card .p small { grid-column: 1 / -1; color: var(--mute); font-size: 11px; }
+  #card .p b { font: 500 11px "IBM Plex Mono", monospace; color: var(--mute); }
+  #card .meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  #card .meta i { font: normal 11px "IBM Plex Mono", monospace; padding: 2px 7px; border: 1px solid var(--line); border-radius: 99px; }
+  #card a.out { font: 500 12px Inter; color: var(--ink); }
+  .legend button.off { opacity: .4; } .legend button[disabled] { cursor: default; }
+  /* Phone: the five-view nav fills the top row, so search takes its own row and the card sits under it. */
+  @media (max-width: 700px) {
+    .chrome { flex-wrap: wrap; } .search { order: 3; flex: 1 1 calc(100% - 52px); margin: 0; } .search input { width: 100%; } #theme { order: 4; }
+    #card, body:not(.film) #card { top: 104px; max-height: 42vh; }
+    .legend { display: flex; left: 12px; right: 12px; bottom: 12px; max-width: none; } .legend button { padding: 5px 9px 5px 7px; font-size: 11px; }
+  }
+  .empty-net { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; color: var(--mute); padding: 20px; }
+  .empty-net code { font: 12px "IBM Plex Mono", monospace; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="graph" aria-label="LinkedIn network graph"></div>
+<header class="chrome">
+  <a class="brand" href="/"><span class="dot"></span><span class="bn">Taste</span></a>
+  <div class="search"><input id="q" placeholder="Person, company or role…" autocomplete="off" /><div id="hits"></div></div>
+  <button id="theme" title="Toggle theme (t)">◐</button>
+</header>
+<aside id="card" class="card"></aside>
+<nav id="legend" class="legend"></nav>
+<footer class="hint"><span id="stat"></span> · click a node · esc to zoom out · t theme</footer>
+<script type="module" src="/src/network.js"></script>
+</body>
+</html>

@@ -1,17 +1,17 @@
-// One app, four views: Atlas (/), Library (/library), History (/history), Boards (/boards, /s/<id>/).
+// One app, five views: Atlas (/), Library (/library), History (/history), Network (/network), Boards (/boards, /s/<id>/).
 // Shared top nav and one theme key, so moving between views feels like one tool, not three sites.
 // Atlas and Library are the same page: switching between them is a URL change plus a "taste:view" event, no reload.
 const KEY = "taste-theme";
-const VIEWS = [["atlas", "/", "Atlas"], ["library", "/library", "Library"], ["history", "/history", "History"], ["boards", "/boards", "Boards"]];
+const VIEWS = [["atlas", "/", "Atlas"], ["library", "/library", "Library"], ["history", "/history", "History"], ["network", "/network", "Network"], ["boards", "/boards", "Boards"]];
 
-export const viewOf = (p = location.pathname) => (p.startsWith("/library") ? "library" : p.startsWith("/history") ? "history" : p.startsWith("/boards") || p.startsWith("/s/") ? "boards" : "atlas");
+export const viewOf = (p = location.pathname) => (p.startsWith("/library") ? "library" : p.startsWith("/history") ? "history" : p.startsWith("/network") ? "network" : p.startsWith("/boards") || p.startsWith("/s/") ? "boards" : "atlas");
 export const getTheme = () => new URLSearchParams(location.search).get("theme") ?? localStorage.getItem(KEY) ?? localStorage.getItem("atlas-theme") ?? localStorage.getItem("board-theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 export const saveTheme = (t) => localStorage.setItem(KEY, t);
 
 // Switch between the two same-page views (atlas, library); returns false when the target needs a page load.
 export function setView(view, { push = true } = {}) {
   const here = viewOf();
-  if ([here, view].some((v) => v === "boards" || v === "history")) return false; // separate pages
+  if ([here, view].some((v) => v === "boards" || v === "history" || v === "network")) return false; // separate pages
   if (push && view !== here) history.pushState(null, "", (view === "library" ? "/library" : "/") + location.hash);
   dispatchEvent(new CustomEvent("taste:view", { detail: { view } }));
   return true;

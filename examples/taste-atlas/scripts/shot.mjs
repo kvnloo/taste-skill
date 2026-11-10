@@ -68,7 +68,14 @@ if (process.env.BOARD) {
   execFileSync(process.execPath, [cli, "compare", id, ids[0], ids[1], "--why", "shot check pair"]);
   const q = await b.newPage({ viewport: { width: 1600, height: 1000 } }); q.on("pageerror", (e) => errs.push(String(e)));
   await q.goto(process.env.BOARD); await q.waitForSelector(".compare:not([hidden]) figure");
-  const ui = await q.evaluate(() => ({ refs: document.querySelectorAll(".ref").length, chip: document.querySelector(".filters .focus")?.textContent, pair: document.querySelectorAll(".compare figure").length, design: document.querySelector("#mkdesign")?.textContent, talk: !!document.querySelector("#sayText") }));
+  const ui = await q.evaluate(() => ({ refs: document.querySelectorAll(".ref").length, chip: document.querySelector(".filters .focus")?.textContent, pair: document.querySelectorAll(".compare figure").length, design: document.querySelector("#mkdesign")?.textContent, directions: !!document.querySelector("#directions"), talk: !!document.querySelector("#sayText") }));
+  // Generated directions (source "variant", added by the agent via `board.mjs image`) show as rounds, every picture loading.
+  const variants = st.all.filter((r) => r.source === "variant").length;
+  if (variants) {
+    await q.waitForFunction(() => [...document.querySelectorAll("#rounds img")].every((i) => i.complete), null, { timeout: 8000 });
+    ui.rounds = await q.$$eval("#rounds img", (l) => l.map((i) => i.naturalWidth));
+    if (ui.rounds.length !== variants || ui.rounds.some((w) => !w)) errs.push(`rounds: ${variants} variants, loaded widths ${ui.rounds}`);
+  }
   await q.screenshot({ path: `${out}/board-compare.png` });
   await q.keyboard.press("1"); await q.waitForFunction((a) => document.querySelector(`.compare figure[data-id="${a}"].pin`), ids[0], { timeout: 4000 });
   const picked = JSON.parse(execFileSync(process.execPath, [cli, "status", id], { encoding: "utf8" }));
@@ -76,7 +83,7 @@ if (process.env.BOARD) {
   for (const c of ["focus", "compare"]) execFileSync(process.execPath, [cli, c, id, "clear"]);
   for (const [r, v] of [[ids[0], "clear"], [ids[1], "clear"]]) await q.evaluate(([r, v]) => fetch("./pick", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: r, verdict: v }) }), [r, v]);
   console.log("talk-ui", JSON.stringify(ui));
-  if (ui.refs !== 6 || ui.pair !== 2 || !ui.chip || !ui.design || !ui.talk) errs.push(`talk-ui assertions failed: ${JSON.stringify(ui)}`);
+  if (ui.refs !== 6 || ui.pair !== 2 || !ui.chip || !ui.design || !ui.directions || !ui.talk) errs.push(`talk-ui assertions failed: ${JSON.stringify(ui)}`);
   console.log("errors:", JSON.stringify(errs)); await b.close(); process.exit(errs.length ? 1 : 0);
 }
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];

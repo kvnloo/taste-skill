@@ -6,7 +6,7 @@ import { mountNav, getTheme, saveTheme } from "./nav.js";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", "mine:project": "your repo", "mine:idea": "your idea", "mine:portfolio": "your work", "mine:youtube": "you watched", "mine:spotify": "you played", "mine:tidal": "you played", "mine:music": "you played", x: "X", dribbble: "Dribbble", behance: "Behance", mobbin: "Mobbin", web: "web" };
+const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", "mine:project": "your repo", "mine:idea": "your idea", "mine:portfolio": "your work", "mine:youtube": "you watched", "mine:spotify": "you played", "mine:tidal": "you played", "mine:music": "you played", x: "X", dribbble: "Dribbble", behance: "Behance", mobbin: "Mobbin", web: "web", variant: "generated" };
 const root = document.documentElement;
 root.dataset.theme = getTheme();
 mountNav($(".bar .brand"));
@@ -84,10 +84,18 @@ async function choose(id) {
   await pick(id, "pin"); await pick(other, "nope"); await talk(`I pick "${board.refs.find((r) => r.id === id)?.title}" over "${board.refs.find((r) => r.id === other)?.title}".`);
 }
 
+function renderRounds() {
+  const v = verdicts(), rounds = new Map();
+  for (const r of board.refs) if (r.source === "variant") (rounds.get(r.round) ?? rounds.set(r.round, []).get(r.round)).push(r);
+  $("#rounds").hidden = !rounds.size;
+  $("#rounds").innerHTML = [...rounds].sort((a, b) => b[0] - a[0]).map(([n, rs]) => `<div class="round"><b>R${n}</b>${rs.map((r) =>
+    `<a href="${esc(r.url)}" target="_blank" title="${esc(r.title)}${r.text ? ` · ${esc(r.text)}` : ""}" class="${v.get(r.id) ?? ""}"><img src="${esc(r.image)}" alt="" /></a>`).join("")}</div>`).join("");
+}
+
 function renderDesign() {
   const d = board.design, picked = [...verdicts().values()].filter((x) => x === "like" || x === "pin").length;
   $("#design").innerHTML = d?.state === "building" ? `<span class="busy">Making the design file…</span>`
-    : `<button id="mkdesign" title="Kept references, techniques, palette and type as an editable design file">${d?.fig ? "Update design" : "Make design"}${picked ? ` from ${picked} kept` : ""}</button>`
+    : `<button id="directions" title="Ask the agent for three different directions from what you kept">3 directions</button><button id="mkdesign" title="Kept references, techniques, palette and type as an editable design file">${d?.fig ? "Update design" : "Make design"}${picked ? ` from ${picked} kept` : ""}</button>`
     + (d?.fig ? `${d.edit ? `<a href="${esc(d.edit)}" target="_blank" rel="noopener">Edit in OpenPencil</a>` : ""}<a href="./design/${esc(d.fig)}" download>.fig</a><a href="./design/board.png" target="_blank">PNG</a>` : "")
     + (d?.state === "failed" ? `<span class="err" title="${esc(d.error)}">failed: ${esc(String(d.error).slice(-80))}</span>` : "");
 }
@@ -107,7 +115,7 @@ async function load() {
   const r = await fetch("./board.json", { cache: "no-store" });
   if (!r.ok) { $("#title").textContent = "This board has ended"; return; }
   board = await r.json();
-  renderHead(); renderPreview(); renderDirection(); renderRefs(); renderCompare(); renderDesign(); renderAgent(); renderNotes();
+  renderHead(); renderPreview(); renderDirection(); renderRefs(); renderCompare(); renderRounds(); renderDesign(); renderAgent(); renderNotes();
   first = false;
 }
 
@@ -131,6 +139,7 @@ $("#filters").addEventListener("click", async (e) => {
 });
 $("#compare").addEventListener("click", (e) => { const b = e.target.closest("button[data-c]"); if (!b) return; b.dataset.c === "clear" ? talk("close the comparison") : choose(b.dataset.c); });
 $("#design").addEventListener("click", async (e) => {
+  if (e.target.closest("#directions")) return talk("make three clearly different design directions from what I kept");
   if (!e.target.closest("#mkdesign")) return;
   const r = await fetch("./design", { method: "POST" }); if (!r.ok && r.status !== 409) alert(await r.text()); load();
 });

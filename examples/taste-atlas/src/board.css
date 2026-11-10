@@ -152,3 +152,10 @@ a.tq { text-decoration: none; } a.tq:hover { text-decoration: underline; }
 .design a { color: var(--ink); font: 600 12px "IBM Plex Mono", monospace; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; text-decoration: none; }
 .design a:hover { background: var(--ink); color: var(--bg); }
 .design .busy { color: var(--mute); } .design .err { color: var(--nope); font: 11px "IBM Plex Mono", monospace; }
+/* Rounds of generated directions, newest first */
+.rounds { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.rounds .round { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
+.rounds b { font: 600 11px "IBM Plex Mono", monospace; color: var(--mute); width: 2.6em; flex: none; }
+.rounds a { flex: none; border-radius: 8px; overflow: hidden; border: 2px solid transparent; }
+.rounds a.pin { border-color: var(--accent); } .rounds a.like { border-color: var(--like); } .rounds a.nope { opacity: .35; }
+.rounds img { height: 64px; display: block; }

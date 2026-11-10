@@ -12,7 +12,9 @@ const phone = () => innerWidth <= 700;
 function region() {
   const shelf = document.querySelector(".shelf")?.getBoundingClientRect();
   if (phone()) { const top = (card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
-  return { x: 0, y: 0, w: innerWidth - (document.querySelector(".shelf.open") ? innerWidth - shelf.left + 18 : 0), h: innerHeight };
+  // The mosaic shelf covers the whole graph (left: 18px); fitting into the zero-width gap gave scale Infinity.
+  const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth;
+  return { x: 0, y: 0, w: free < 240 ? innerWidth : free, h: innerHeight };
 }
 // Deeper zooms leave room for side labels (technique names sit beside their node).
 const fitR = (id) => A.fit(id, phone() ? ((A.graph.byId.get(id)?.level ?? 0) >= 3 ? 0.72 : 0.94) : 0.82, region());

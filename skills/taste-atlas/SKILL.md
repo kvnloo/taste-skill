@@ -56,7 +56,8 @@ keep it updated; the page refreshes within a second of each write. CLI: `scripts
 - Labels come from a vision-model teacher (image + text) and are estimates; treat a reference as a
   lead to look at, not proof that it shows the technique.
 - References include "sources" (`layer` field): `ask` = something the owner asked to recreate or
-  triage (his words are in `text`, the post in `post`), `film` = a video he made, `project`/`idea` =
+  triage (his words are in `text`, the post in `post`), `film` = a video he made, `ref` = an ad, film or open prompt corpus he studies (with
+  `stats` reach numbers: judge by likes per view, not raw paid views), `project`/`idea` =
   his own work, `portfolio` = an app from his portfolio (`site`, `repo`, `cat`). When a brief cites an
   `ask`, re-read what he asked before building.
 - `node atlas.mjs export` is the stable machine-readable taxonomy (`taste-atlas.taxonomy.v1`).

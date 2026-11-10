@@ -9,8 +9,8 @@ const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const techById = new Map(TECHNIQUES.map((t) => [t.id, t]));
-const LAYERS = { portfolio: "Portfolio", ask: "Asked about", film: "Films", project: "Projects", idea: "Ideas" };
-const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", project: "Open on GitHub ↗", idea: "Open ↗" };
+const LAYERS = { portfolio: "Portfolio", ask: "Asked about", film: "Films", ref: "Studied", project: "Projects", idea: "Ideas" };
+const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗" };
 const OWN = new Set(["film", "idea", "portfolio"]); // your own work: show its name, not an @handle
 const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.decoding = "async"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
 
@@ -131,7 +131,9 @@ export async function mountBookmarks(A, { go }) {
     const t = techById.get(b.technique), line = t ? lineage(A.graph.byId.get(b.technique)) : [], op = t ? opById[t.op] : { color: "#888" }, also = techById.get(b.also);
     const src = b.layer && b.layer !== "saved", host = b.url ? b.url.split("/")[2]?.replace(/^www\./, "") : "";
     const open = !b.url ? "" : /(^|\.)x\.com$|twitter\.com$/.test(host) ? "Open on X ↗" : src ? OPEN[b.layer] : "Open on X ↗";
-    const body = b.layer === "ask" ? `${b.post ? `<p>${esc(b.post)}</p>` : ""}<p class="asked"><b>You asked:</b> ${esc(b.text)}</p>` : `<p>${esc(b.text)}</p>`;
+    const body = b.layer === "ask" ? `${b.post ? `<p>${esc(b.post)}</p>` : ""}<p class="asked"><b>You asked:</b> ${esc(b.text)}</p>` : `${b.layer === "ref" && b.title ? `<p><b>${esc(b.title)}</b></p>` : ""}<p>${esc(b.text)}</p>`;
+    const n = (v) => Number(v).toLocaleString(), s = b.stats;
+    const stats = s ? `<p class="asked"><b>Reach:</b> ${[s.views && `${n(s.views)} views`, s.likes && `${n(s.likes)} likes`, s.likes_per_view && `${(s.likes_per_view * 100).toFixed(2)}% likes/view`, s.generations && `${n(s.generations)} generations`].filter(Boolean).join(" · ")}${s.as_of ? ` (as of ${esc(s.as_of)})` : ""}</p>` : "";
     // Videos/GIFs play straight away from X's mp4 (the click is the user gesture, so sound is allowed);
     // the poster is the local thumb, and the frame strip remains the fallback if the mp4 fails.
     const gif = b.type === "animated_gif";
@@ -142,7 +144,7 @@ export async function mountBookmarks(A, { go }) {
     box.innerHTML = `<div class="lb-card"><button class="lb-x" aria-label="Close">×</button>
       ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
-      ${body}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
+      ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}</div></div></div>`;
     box.classList.add("on");
     const v = box.querySelector("video");

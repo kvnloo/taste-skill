@@ -78,6 +78,17 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
     return r;
   });
   console.log("features:", JSON.stringify(feats));
+    // Studied layer (--refs): the chip filters the shelf, and a ref with stats shows its reach in the detail view.
+  const step = async (name, fn) => { const n = errs.length; const r = await p.evaluate(fn); await p.waitForTimeout(600); if (errs.length > n) console.log("errors in", name, errs.length - n); return r; };
+  if (await p.$(".shelf [data-l=ref]")) {
+    await step("root", () => window.__atlas.go("root", 10));
+    await step("chip", () => document.querySelector(".shelf [data-l=ref]").click());
+    await step("open", () => [...document.querySelectorAll(".shelf .grid a")].find((a) => /hell-grind/.test(a.href))?.click());
+    const studied = await p.evaluate(() => ({ title: document.querySelector(".shelf header b")?.textContent, tiles: document.querySelectorAll(".shelf .grid a").length,
+      reach: [...document.querySelectorAll(".lightbox.on .asked")].map((e) => e.textContent).find((t) => t.startsWith("Reach")) ?? null }));
+    await p.screenshot({ path: `${out}/bm-studied.png` }); console.log("studied:", JSON.stringify(studied));
+    await step("close", () => { document.querySelector(".lb-x")?.click(); document.querySelector(".shelf [data-l=ref].on")?.click(); });
+  }
   // Clicking a video bookmark plays it at once (real mouse click = user gesture).
   const vid = await p.evaluate(() => { const a = [...document.querySelectorAll(".shelf .grid a")].find((x) => x.querySelector(".play")); return a?.dataset.post; });
   if (vid) {

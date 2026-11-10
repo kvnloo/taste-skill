@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Build the "sources" layer: things you asked an agent to recreate, films you made, and your own GitHub
 // projects and ideas. Each item is placed on a technique (best text match) and shows beside your bookmarks.
-//   node scripts/sources.mjs [--asks asks.jsonl] [--films films.jsonl] [--projects projects.json] [--portfolio apps.json] [--labels labels.jsonl]
+//   node scripts/sources.mjs [--asks asks.jsonl] [--films films.jsonl] [--projects projects.json] [--portfolio apps.json] [--refs refs.jsonl] [--labels labels.jsonl]
 // --labels: {id, techniques:[...], seen} per line, e.g. from taste/scripts/label_bookmarks_teacher.py run on these
 // items. Unlabelled items stay off the graph and list under "All" in the shelf; keyword matching was tried and is noise.
 // Writes $ATLAS_DATA/sources.atlas.json (default ../data, gitignored) and thumbnails into data/thumbs/.
 // Inputs, all optional, one JSON object per line for .jsonl:
 //   asks:     {url, text, date}            a link plus what you asked about it (X posts get media via fxtwitter)
 //   films:    {id, url, title, text, thumb_file, date}
+//   refs:     {id, url, title, author, text, date, format, stats?, thumb?}  ads, films and methods you study (--refs)
 //   projects: {"github": "<user>", "repos": 12, "only"?: [names, forks allowed], "ideas": [{"title", "text", "url"?, "image"?}]}  see sources.example.json
 // reuse-checked: scripts/atlas.mjs -- agent CLI over the taxonomy; this only builds data. bookmark sync -- X saves only.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
@@ -66,6 +67,28 @@ function films() {
   });
 }
 
+// Refs: work by others you study (ads, short films, open prompt corpora). X posts get media like asks; YouTube
+// gets its poster frame. `stats` (views, likes, as_of) rides along so the shelf can show what reached people.
+async function refs() {
+  const out = [];
+  for (const r of lines(arg("--refs"))) {
+    let item = { ...r, type: r.type ?? "video", thumb: null };
+    const x = r.url.match(/(?:x|twitter)\.com\/([^/]+)\/status\/(\d+)/), yt = r.url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/);
+    if (x) try {
+      const t = (await json(`https://api.fxtwitter.com/${x[1]}/status/${x[2]}`)).tweet, med = t.media?.all?.[0];
+      item = { ...item, post: t.text, likes: t.likes, type: med?.type ?? "text" };
+      if (med?.type === "video" || med?.type === "gif") item.video = med.url;
+      const img = med?.thumbnail_url ?? (med?.type === "photo" ? med.url : null);
+      if (img) item.thumb = await save(img, `${r.id}.jpg`);
+    } catch (e) { process.stderr.write(`fxtwitter: ${e.message}\n`); }
+    const img = r.thumb ?? (yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : null);
+    if (!item.thumb && img) item.thumb = await save(img, `${r.id}${extname(new URL(img).pathname) || ".jpg"}`);
+    if (r.stats?.views) item.likes ??= r.stats.likes;
+    out.push(place(item, "ref"));
+  }
+  return out;
+}
+
 async function projects() {
   const f = arg("--projects"); if (!f || !existsSync(f)) return [];
   const p = JSON.parse(readFileSync(f, "utf8")), out = [];
@@ -118,7 +141,7 @@ function shoot(url, name) {
   } catch (e) { process.stderr.write(`screenshot ${url}: ${String(e.stderr || e.message).trim().split("\n").pop()}\n`); return null; }
 }
 
-const items = [...(await asks()), ...films(), ...(await projects()), ...(await portfolio())];
+const items = [...(await asks()), ...films(), ...(await refs()), ...(await projects()), ...(await portfolio())];
 const out = join(data, "sources.atlas.json");
 writeFileSync(out, JSON.stringify({ kind: "taste-atlas.sources.v1", method: labels.size ? "teacher labels (image + text)" : "unlabelled", count: items.length, items }, null, 1));
 const by = items.reduce((m, i) => ((m[i.layer] = (m[i.layer] ?? 0) + 1), m), {});

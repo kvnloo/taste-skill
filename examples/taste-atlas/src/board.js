@@ -2,12 +2,14 @@
 import { techById } from "./brief.js";
 import { opById } from "./taxonomy.js";
 import { specimen, CARD } from "./specimens.js";
+import { mountNav, getTheme, saveTheme } from "./nav.js";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", "mine:project": "your repo", "mine:idea": "your idea", "mine:portfolio": "your work", x: "X", dribbble: "Dribbble", behance: "Behance", mobbin: "Mobbin", web: "web" };
 const root = document.documentElement;
-root.dataset.theme = localStorage.getItem("board-theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+root.dataset.theme = getTheme();
+mountNav($(".bar .brand"));
 
 let board = null, filter = "all", previewRev = -1, seenRefs = new Set(), seenNotes = 0, first = true;
 
@@ -19,7 +21,7 @@ const verdicts = () => { const m = new Map(); for (const p of board.picks ?? [])
 
 function renderHead() {
   $("#title").textContent = board.title; $("#goal").textContent = board.goal || "";
-  document.title = `${board.title} · Taste board`;
+  document.title = `${board.title} · Taste`;
 }
 
 function renderPreview() {
@@ -43,9 +45,9 @@ function renderDirection() {
   const pal = board.palette.map((c) => `<i style="background:${esc(c)}" title="${esc(c)}"><b>${esc(c)}</b></i>`).join("");
   const type = board.type.map((f) => `<span style="font-family:'${esc(f)}',serif">${esc(f)}</span>`).join("");
   $("#direction").innerHTML = ts.length || pal || type ? `
-    ${ts.map((t) => { const op = opById[t.op]; return `<article class="tech" style="--op:${op.color}">
+    ${ts.map((t) => { const op = opById[t.op]; return `<a class="tech" href="/#${esc(t.id)}" title="Open ${esc(t.name)} in the atlas" style="--op:${op.color}">
       <svg viewBox="0 0 ${CARD.w} ${CARD.h}">${specimen(t.family, 3, 0)}</svg>
-      <div><small>${esc(op.name)} · ${esc(t.domain)}</small><h3>${esc(t.name)}</h3><p>${esc(t.mech)}</p><p class="ui">${esc(t.ui ?? "")}</p></div></article>`; }).join("")}
+      <div><small>${esc(op.name)} · ${esc(t.domain)}</small><h3>${esc(t.name)}</h3><p>${esc(t.mech)}</p><p class="ui">${esc(t.ui ?? "")}</p></div></a>`; }).join("")}
     ${pal ? `<div class="pal">${pal}</div>` : ""}${type ? `<div class="type">${type}</div>` : ""}` : `<p class="hint">Techniques, palette and type land here as the direction firms up.</p>`;
 }
 
@@ -61,7 +63,7 @@ function renderRefs() {
     const s = v.get(r.id) ?? "", fresh = !first && !seenRefs.has(r.id);
     return `<figure class="ref ${s} ${fresh ? "fresh" : ""}" data-id="${r.id}">
       <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${r.image ? `<img loading="lazy" src="${esc(r.image)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'${esc(r.source)}'}))" />` : `<div class="noimg">${esc(new URL(r.url).hostname.replace(/^www\./, ""))}</div>`}</a>
-      <figcaption><span class="src">${esc(SRC[r.source] ?? r.source)}</span>${r.technique ? `<span class="tq">${esc(techById.get(r.technique)?.name ?? r.technique)}</span>` : ""}<b>${esc(r.title)}</b>${r.text ? `<p>${esc(r.text)}</p>` : ""}</figcaption>
+      <figcaption><span class="src">${esc(SRC[r.source] ?? r.source)}</span>${r.technique ? `<a class="tq" href="/#${esc(r.technique)}" title="See this technique in the atlas">${esc(techById.get(r.technique)?.name ?? r.technique)}</a>` : ""}<b>${esc(r.title)}</b>${r.text ? `<p>${esc(r.text)}</p>` : ""}</figcaption>
       <div class="acts"><button data-v="like" title="More like this">♥</button><button data-v="pin" title="Pin: use this">⌖</button><button data-v="nope" title="Not this">✕</button></div>
     </figure>`;
   }).join("") : `<p class="hint">${board.refs.length ? "Nothing in this filter." : "References appear here: your bookmarks, links you sent, and Dribbble, Behance and Mobbin finds."}</p>`;
@@ -97,7 +99,7 @@ $("#wall").addEventListener("click", async (e) => {
 });
 $("#filters").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (b) { filter = b.dataset.f; renderRefs(); } });
 $("#say").addEventListener("submit", async (e) => { e.preventDefault(); const i = $("#sayText"); if (!i.value.trim()) return; await pick(null, "note", i.value.trim()); i.value = ""; load(); });
-const theme = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; localStorage.setItem("board-theme", root.dataset.theme); };
+const theme = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; saveTheme(root.dataset.theme); };
 $("#theme").onclick = theme;
 addEventListener("keydown", (e) => { if (e.key === "t" && e.target.tagName !== "INPUT") theme(); });
 window.__board = { load, get state() { return board; } };

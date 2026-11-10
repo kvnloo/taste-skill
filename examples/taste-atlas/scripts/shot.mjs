@@ -27,17 +27,17 @@ if (process.env.BOARD) {
 }
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];
 for (const [name, hash, theme] of shots) {
-  await p.goto(`http://127.0.0.1:8787/?theme=${theme}${hash}`); await p.waitForTimeout(1800);
+  await p.goto(`http://127.0.0.1:8789/?theme=${theme}${hash}`); await p.waitForTimeout(1800);
   await p.screenshot({ path: `${out}/${name}.png` });
 }
 // Interaction check: search + enter.
-await p.goto("http://127.0.0.1:8787/?theme=light"); await p.waitForTimeout(500);
+await p.goto("http://127.0.0.1:8789/?theme=light"); await p.waitForTimeout(500);
 await p.fill("#q", "closure"); await p.keyboard.press("Enter"); await p.waitForTimeout(1500);
 console.log("after search focus:", await p.evaluate(() => window.__atlas.A.view.focus), "hash:", await p.evaluate(() => location.hash));
 await p.keyboard.press("Escape"); await p.waitForTimeout(1200);
 console.log("after esc focus:", await p.evaluate(() => window.__atlas.A.view.focus));
 // Private bookmarks layer (only when ./data is present): shelf follows focus, thumbnails load.
-const base = process.env.BASE ?? "http://127.0.0.1:8787";
+const base = process.env.BASE ?? "http://127.0.0.1:8789";
 await p.goto(`${base}/?theme=light`);
 if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).catch(() => null)) {
   for (const [name, id] of [["bm-root", "root"], ["bm-op", "evoke"], ["bm-tech", "tactile-surface"]]) {

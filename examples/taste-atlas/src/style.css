@@ -124,4 +124,7 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 .shelf.open.wide { left: 18px; width: auto; z-index: 20; }
 .shelf.wide .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .shelf.wide .grid a { padding-bottom: 100%; }
-@media (max-width: 700px) { .shelf .wid { order: 1; width: 36px; height: 36px; } .shelf.open.wide { left: 0; top: 0; height: auto; border-radius: 0; } .shelf.wide .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }
+@media (max-width: 700px) { .shelf .wid { order: 1; width: 36px; height: 36px; } .shelf.open.wide { left: 0; top: 58px; height: auto; border-radius: 16px 16px 0 0; } .shelf.wide .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }
+
+/* Phone header: dot + view switcher + search + theme must fit 360px. */
+@media (max-width: 700px) { .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 auto; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } #hits { width: min(280px, calc(100vw - 24px)); } }

@@ -49,6 +49,10 @@ keep it updated; the page refreshes within a second of each write. CLI: `scripts
 4. Read `status <id>` before each next step: liked, pinned and noped references and his typed notes
    steer the design. Pinned beats liked; never bring back a noped reference.
 
+The board is one view of the Taste app (`board.mjs serve`, tailnet https://0.taila30dc.ts.net:8788/ and
+:8789, same server): Atlas `/`, Library `/library`, Boards `/boards`. Posts he adds from the library
+("+ Board") land in the newest board's refs as `mine:<layer>`, so `status` shows them like any other ref.
+
 ## Rules
 
 - References are the owner's private bookmarks: link them in local briefs only; never paste their

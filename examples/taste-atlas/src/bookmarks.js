@@ -4,6 +4,7 @@
 // technique nodes, a constellation of every post around the ring, a shelf listing the posts under the
 // current focus (filterable by subject), "recorded examples" on the lineage card, and a detail view.
 import { TECHNIQUES, opById, lineage } from "./taxonomy.js";
+import { viewOf, setView } from "./nav.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
@@ -126,8 +127,12 @@ export async function mountBookmarks(A, { go }) {
 
   // Detail view: the post large, its lineage, and the way out to X.
   const box = document.createElement("div"); box.className = "lightbox"; document.body.appendChild(box);
+  // The newest board, so any post can be sent straight onto the brainstorm in progress.
+  let board = null, current = null;
+  fetch("/api/boards", { cache: "no-store" }).then((r) => (r.ok ? r.json() : [])).then((l) => { board = l[0] ?? null; }).catch((e) => console.error("boards:", e));
   function detail(b) {
     if (!b) return;
+    current = b;
     const t = techById.get(b.technique), line = t ? lineage(A.graph.byId.get(b.technique)) : [], op = t ? opById[t.op] : { color: "#888" }, also = techById.get(b.also);
     const src = b.layer && b.layer !== "saved", host = b.url ? b.url.split("/")[2]?.replace(/^www\./, "") : "";
     const open = !b.url ? "" : /(^|\.)x\.com$|twitter\.com$/.test(host) ? "Open on X ↗" : src ? OPEN[b.layer] : "Open on X ↗";
@@ -145,7 +150,7 @@ export async function mountBookmarks(A, { go }) {
       ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
       ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
-      <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}</div></div></div>`;
+      <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}${board && b.url ? `<button data-board="${esc(board.id)}" title="Add to the board: ${esc(board.title)}">+ Board: ${esc(board.title.slice(0, 28))}</button>` : ""}</div></div></div>`;
     box.classList.add("on");
     const v = box.querySelector("video");
     if (v) {
@@ -157,6 +162,15 @@ export async function mountBookmarks(A, { go }) {
   box.addEventListener("click", (e) => {
     const g = e.target.closest("[data-go]")?.dataset.go;
     if (g) { e.preventDefault(); close(); go(g); return; }
+    const bt = e.target.closest("[data-board]");
+    if (bt) {
+      const b = current, ref = { url: b.url, title: OWN.has(b.layer) ? b.title ?? b.author : `@${b.author}`, text: (b.seen ?? b.text ?? "").slice(0, 280), image: b.thumb ? `/data/${b.thumb}` : null, video: b.video, source: b.layer && b.layer !== "saved" ? `mine:${b.layer}` : "mine", technique: b.technique };
+      bt.disabled = true;
+      fetch(`/s/${bt.dataset.board}/ref`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(ref) })
+        .then(async (r) => { if (!r.ok) throw new Error(await r.text()); bt.outerHTML = `<a href="/s/${esc(bt.dataset.board)}/">On the board ✓ Open it</a>`; })
+        .catch((err) => { bt.textContent = `Failed: ${err.message.slice(0, 60)}`; bt.disabled = false; });
+      return;
+    }
     if (e.target === box || e.target.closest(".lb-x")) close();
   });
   addEventListener("keydown", (e) => { if (e.key === "Escape" && box.classList.contains("on")) { close(); e.stopImmediatePropagation(); } }, true);
@@ -175,7 +189,10 @@ export async function mountBookmarks(A, { go }) {
   const shelf = document.createElement("aside"); shelf.className = "shelf"; document.body.appendChild(shelf);
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
   let layer = null; // a sources layer chip, or null for every layer
-  let subject = null, open = innerWidth > 700, wide = false, last = null, shown = 60;
+  const lib = viewOf() === "library"; // Library = this shelf as a full-screen mosaic, at /library
+  let subject = null, open = lib || innerWidth > 700, wide = lib, last = null, shown = lib ? 180 : 60;
+  addEventListener("taste:view", (e) => { const w = e.detail.view === "library"; if (w === wide) return; wide = w; if (w) open = true; shown = w ? 180 : 60; draw(); });
+  const toggleWide = () => setView(wide ? "atlas" : "library");
   const under = (id) => {
     const n = A.graph.byId.get(id) ?? A.graph.root;
     const t = n.level === 4 ? n.parent : n;
@@ -190,7 +207,7 @@ export async function mountBookmarks(A, { go }) {
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
     const title = n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR TASTE</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="Mosaic view (m)">${wide ? "▢" : "⤢"}</button></header>
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR TASTE</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : "@" + b.author;
@@ -202,14 +219,14 @@ export async function mountBookmarks(A, { go }) {
       <footer>${esc(data.method)} · labels are estimates</footer>`;
   }
   shelf.addEventListener("click", (e) => {
-    if (e.target.closest(".wid")) { wide = !wide; open = true; shown = wide ? 180 : 60; draw(); return; }
-    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
+    if (e.target.closest(".wid")) { toggleWide(); return; }
+    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; if (s === "all") layer = null; shown = 60; draw(); }
     const l = e.target.closest("[data-l]")?.dataset.l; if (l) { layer = layer === l ? null : l; shown = 60; draw(); }
     if (e.target.closest(".more")) { shown += wide ? 180 : 60; draw(); }
     const post = e.target.closest("[data-post]"); if (post) { e.preventDefault(); detail(byId.get(post.dataset.post)); }
   });
-  addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") { wide = !wide; open = true; shown = wide ? 180 : 60; draw(); } });
+  addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") toggleWide(); });
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
   (function poll() { if (A.view.focus !== last) { last = A.view.focus; shown = 60; draw(); } paint(); requestAnimationFrame(poll); })();
   draw(); go(A.view.focus, 600);

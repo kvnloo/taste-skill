@@ -3,7 +3,7 @@
 import { createRequire } from "node:module";
 const require = createRequire(process.env.PW_FROM ?? "/mnt/zer0models/project-artifacts/taste/pw/package.json");
 const { chromium } = require("playwright-core");
-const base = process.argv[2] ?? "http://127.0.0.1:8787";
+const base = process.argv[2] ?? "http://127.0.0.1:8789";
 const budget = +(process.env.BUDGET_MS ?? 34);
 // Real phones raster on the GPU; headless Chromium defaults to software raster, which inflates
 // paint-heavy frames. GPU=0 measures the software path instead.

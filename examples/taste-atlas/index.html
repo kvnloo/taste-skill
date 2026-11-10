@@ -5,16 +5,17 @@
 <!-- X's video CDN refuses requests that carry a foreign referrer; bookmark videos need none. -->
 <meta name="referrer" content="no-referrer" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Taste Atlas</title>
+<title>Taste · Atlas</title>
 <link rel="icon" href="data:," />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="./src/style.css" />
+<link rel="stylesheet" href="./src/nav.css" />
 </head>
 <body>
 <svg id="atlas" aria-label="Design taxonomy graph"></svg>
 <header class="chrome">
-  <div class="brand"><span class="dot"></span>Taste Atlas</div>
+  <a class="brand" href="/"><span class="dot"></span><span class="bn">Taste</span></a>
   <div class="search"><input id="q" placeholder="Search…" autocomplete="off" /><div id="hits"></div></div>
   <button id="theme" title="Toggle theme (t)">◐</button>
 </header>

@@ -116,7 +116,7 @@ function mine(query, n, layers = null) {
     return { b, s: (rank[b.layer] ?? 0) + (all ? 1 + (b.thumb ? 0.1 : 0) : words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0) + (techs.has(b.technique) ? 0.5 : 0) + (b.thumb ? 0.1 : 0)) };
   }).filter((r) => r.s >= 1).sort((a, b) => b.s - a.s).slice(0, n).map(({ b }) => ({
     id: randomBytes(4).toString("hex"), url: b.url, title: b.title ?? `@${b.author}`, text: (b.layer === "ask" ? `You asked: ${b.text}` : b.seen ?? b.text ?? "").slice(0, 280),
-    image: b.thumb ? `/atlas/data/${b.thumb}` : null, video: b.video, source: b.layer ? `mine:${b.layer}` : "mine", technique: b.technique, t: now(),
+    image: b.thumb ? `/data/${b.thumb}` : null, video: b.video, source: b.layer ? `mine:${b.layer}` : "mine", technique: b.technique, t: now(),
   }));
 }
 
@@ -138,9 +138,13 @@ function serve() {
   const inside = (root, p) => { const f = resolve(root, "." + decodeURIComponent(p)); return f.startsWith(resolve(root) + "/") || f === resolve(root) ? f : null; };
   createServer((req, res) => {
     const u = new URL(req.url, LOCAL), m = u.pathname.match(/^\/s\/([a-z0-9-]{4,40})(\/.*)?$/);
-    if (u.pathname === "/") { res.writeHead(302, { location: `/s/${latest() ?? "none"}/` }).end(); return; }
+    // One app: atlas (/), library (/library) and boards (/boards, /s/<id>/) share this origin, nav and theme.
+    if (u.pathname === "/" || u.pathname === "/library") return file(res, join(app, "index.html"));
+    if (u.pathname === "/boards") return file(res, join(app, "boards.html"));
+    if (u.pathname === "/api/boards") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(boardList())); return; }
+    if (u.pathname === "/atlas" || u.pathname === "/atlas/" || u.pathname === "/atlas/index.html") { res.writeHead(301, { location: "/" + u.search }).end(); return; }
     if (u.pathname.startsWith("/atlas/")) { const f = inside(app, u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }
-    if (!m) { res.writeHead(404).end("not found"); return; }
+    if (!m) { const f = inside(app, u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }
     const d = join(HOME, m[1]), sub = m[2] ?? "/";
     if (!existsSync(join(d, "board.json"))) { res.writeHead(404, { "content-type": "text/plain" }).end(`No board ${m[1]}. Start one: board.mjs start`); return; }
     if (sub === "/") return file(res, join(app, "board.html"));
@@ -163,12 +167,32 @@ function serve() {
         } catch (e) { res.writeHead(400).end(e.message); }
       }); return;
     }
+    if (sub === "/ref" && req.method === "POST") {  // a post sent from the atlas/library lightbox
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const r = JSON.parse(body), url = new URL(r.url);
+          if (!/^https?:$/.test(url.protocol)) throw new Error("ref url must be http(s)");
+          const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : undefined);
+          const fresh = addRefs(d, [{ id: randomBytes(4).toString("hex"), url: url.href, title: str(r.title, 200) ?? url.hostname, text: str(r.text, 280) ?? "", image: str(r.image, 500) ?? null, video: str(r.video, 500), source: str(r.source, 40) ?? "mine", technique: str(r.technique, 60), t: now() }]);
+          res.writeHead(fresh.length ? 201 : 200, { "content-type": "application/json" }).end(JSON.stringify({ added: fresh.length }));
+        } catch (e) { res.writeHead(400).end(e.message); }
+      }); return;
+    }
     if (sub.startsWith("/preview/")) { const f = inside(join(d, "preview"), sub.slice(8)); return f ? file(res, f.endsWith("/") || !extname(f) ? join(f, "index.html") : f, { "content-security-policy": "frame-ancestors 'self'" }) : res.writeHead(403).end(); }
     res.writeHead(404).end("not found");
   }).listen(PORT, "127.0.0.1", () => process.stderr.write(`taste board on ${LOCAL}\n`));
 }
 
 const sessions = () => (existsSync(HOME) ? readdirSync(HOME).filter((s) => existsSync(join(HOME, s, "board.json"))) : []);
+function boardList() {
+  return sessions().map((id) => {
+    const d = join(HOME, id), b = read(d), v = new Map(picks(d).filter((p) => p.ref).map((p) => [p.ref, p.verdict]));
+    const kept = b.refs.filter((r) => ["like", "pin"].includes(v.get(r.id)));
+    const images = [...kept, ...b.refs.filter((r) => !kept.includes(r))].map((r) => r.image).filter(Boolean).slice(0, 6);
+    return { id, title: b.title, goal: b.goal, refs: b.refs.length, kept: kept.length, notes: b.notes.length + picks(d).filter((p) => p.verdict === "note").length, preview: b.preview?.rev ?? 0, images, updated: Math.max(statSync(join(d, "board.json")).mtimeMs, existsSync(join(d, "picks.jsonl")) ? statSync(join(d, "picks.jsonl")).mtimeMs : 0) };
+  }).sort((a, b) => b.updated - a.updated);
+}
 const latest = () => sessions().sort((a, b) => statSync(join(HOME, b, "board.json")).mtimeMs - statSync(join(HOME, a, "board.json")).mtimeMs)[0];
 async function up() { try { return (await fetch(LOCAL + "/s/x/", { signal: AbortSignal.timeout(1500) })).status > 0; } catch { return false; } }
 

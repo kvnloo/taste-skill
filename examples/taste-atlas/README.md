@@ -18,8 +18,14 @@ motion principles). It is a separate, fuller take on `examples/visual-reference-
 ## Run
 
 ```sh
-python3 -m http.server 8787   # then open http://127.0.0.1:8787/
+node scripts/board.mjs serve   # then open http://127.0.0.1:8789/
 ```
+
+One app, three views sharing a nav, theme and data: **Atlas** (`/`, the taxonomy graph), **Library**
+(`/library`, every saved post as a filterable mosaic; same page, no reload) and **Boards** (`/boards`,
+live brainstorm boards at `/s/<id>/`). Board technique tags open the atlas at that technique, and any
+post in the library has "+ Board" to drop it onto the newest board. A plain static server
+(`python3 -m http.server`) still renders the atlas alone.
 
 Click a node to focus its branch, click again or press Esc to step out, `/` to search, `t` for the
 theme. Deep links work: `/#color-isolation`, `/?theme=dark#instrument-language`.

@@ -3,6 +3,7 @@ import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { brief, briefMarkdown } from "./brief.js";
+import { mountNav, getTheme, saveTheme } from "./nav.js";
 
 const svg = document.getElementById("atlas");
 const card = document.getElementById("card");
@@ -99,7 +100,8 @@ q.addEventListener("keydown", (e) => {
 hits.addEventListener("click", (e) => { const id = e.target.closest("[data-id]")?.dataset.id; if (id) { go(id); q.value = ""; show(); } });
 
 // Theme, keys, legend.
-const theme = (t) => { A.view.theme = t; localStorage.setItem("atlas-theme", t); };
+const theme = (t) => { A.view.theme = t; saveTheme(t); };
+mountNav(document.querySelector(".chrome .brand"));
 document.getElementById("theme").onclick = () => theme(A.view.theme === "dark" ? "light" : "dark");
 addEventListener("keydown", (e) => {
   if (e.target === q) { if (e.key === "Escape") q.blur(); return; }
@@ -114,7 +116,7 @@ addEventListener("hashchange", () => { const id = location.hash.slice(1); if (A.
 
 const st = stats();
 document.getElementById("stat").textContent = `${OPERATIONS.length} operations · ${st.techniques} techniques · ${st.executions} specimens`;
-theme(params.get("theme") ?? localStorage.getItem("atlas-theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+theme(getTheme());
 A.view.labelScale = phone() ? 0.8 : 1;
 A.view.cam = fitR("root");
 const start = location.hash.slice(1);

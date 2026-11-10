@@ -35,6 +35,22 @@ if (process.env.DIAG) { await p.addStyleTag({ content: "* { backdrop-filter: non
 await p.screenshot({ path: `${shots}/lod-s2.5.png` });
 await cam(14); await sleep(2500);
 l = await p.evaluate(() => window.__atlas.bm.lod()); console.log("s=14 big stills", l.big, "playing", l.playing.length);
+// Full resolution: deep in, stills must come from the original file (wider than the 1600px tier) and clips from the
+// native-size loop, not the 480px one.
+console.log("s=14 widest still", l.bigW, "clips", JSON.stringify(l.playing.map((v) => [v.src, v.w])));
+// At s=14 a tile is ~1100 device px, so the 1600px still is already sharper than the screen; at the 24x maximum
+// it is ~1900 px and the original has to load.
+await cam(24); await sleep(3000); l = await p.evaluate(() => window.__atlas.bm.lod()); console.log("s=24 widest still", l.bigW);
+await p.screenshot({ path: `${shots}/lod-s24.png` });
+if (l.bigW <= 1600) fail.push(`max zoom still capped at ${l.bigW}px (no original loaded)`);
+if (l.playing.length && !l.playing.every((v) => v.src?.startsWith("clips_hd/") && v.w > 480)) fail.push("deep zoom clips are not native size");
+// Detail view: a photo post opens at its original resolution.
+const ph = await p.evaluate(() => { const h = window.__atlas.bm.hires?.() ?? {}; const b = window.__atlas.bm.items.find((b) => b.type === "photo" && h[b.id]?.orig && (h[b.id].w ?? 0) > 1000); return b && { id: b.id, w: h[b.id].w }; });
+if (!ph) fail.push("no photo post with an original to open");
+else { await p.evaluate((id) => window.__atlas.bm.detail(window.__atlas.bm.items.find((b) => b.id === id)), ph.id);
+  await p.waitForFunction((w) => document.querySelector(".lightbox img.hero")?.naturalWidth === w, ph.w, { timeout: 15000 }).catch(() => {});
+  const nw = await p.evaluate(() => document.querySelector(".lightbox img.hero")?.naturalWidth); console.log("detail photo", ph.id, "natural", nw, "original", ph.w);
+  if (nw !== ph.w) fail.push(`detail photo shows ${nw}px, original is ${ph.w}px`); await p.screenshot({ path: `${shots}/lod-detail.png` }); await p.keyboard.press("Escape"); }
 await p.screenshot({ path: `${shots}/lod-s14.png` });
 await cam(0.3); await sleep(1500); l = await p.evaluate(() => window.__atlas.bm.lod()); console.log("s=0.3 playing", l.playing.length);
 if (l.playing.length) fail.push("clips still playing when zoomed out");

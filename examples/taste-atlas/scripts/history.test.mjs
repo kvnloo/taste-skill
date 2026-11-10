@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parseHistory } from "./history.mjs";
+import { parseHistory, github } from "./history.mjs";
 
 const dir = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "history-"));
 const file = (name, body) => { const f = join(dir, name); writeFileSync(f, typeof body === "string" ? body : JSON.stringify(body)); return f; };
@@ -15,6 +15,8 @@ test("YouTube Takeout HTML: likes and repeat watches rank, one-off watches and d
   const { kind, items } = parseHistory(file("MyActivity.html", html));
   assert.equal(kind, "youtube");
   assert.deepEqual(items.map((i) => [i.id, i.title, i.why, i.date]), [["yt-aaaaaaaaaaa", "Twice & liked", "liked, watched 2×", "2026-08-15"]]);
+  const { series } = parseHistory(file("MyActivity.html", html));
+  assert.equal(series.events, 5); assert.deepEqual(series.daily, { "2026-08-15": 5 }); assert.deepEqual(series.top[0], { name: "Chan", n: 3 });
 });
 
 test("YouTube Takeout JSON", () => {
@@ -55,4 +57,22 @@ test("Tidal CSV with quotes, commas and play counts", () => {
 test("unknown files and CSVs without title/artist fail loudly", () => {
   assert.throws(() => parseHistory(file("notes.txt", "hello")), /not a YouTube Takeout/);
   assert.throws(() => parseHistory(file("x.csv", "a,b\n1,2\n")), /needs title\/track and artist/);
+});
+
+test("GitHub: contribution calendar per year, languages of own non-fork repos, starred repos newest first", () => {
+  const year = new Date().getFullYear(), calls = [];
+  const gh = (args) => {
+    calls.push(args.join(" "));
+    const a = args.join(" ");
+    if (a.includes("createdAt")) return JSON.stringify({ data: { user: { createdAt: `${year - 1}-03-01T00:00:00Z` } } });
+    if (a.includes("contributionsCollection")) { const y = a.match(/f=(\d{4})/)[1]; return JSON.stringify({ data: { user: { contributionsCollection: { contributionCalendar: { weeks: [{ contributionDays: [{ date: `${y}-05-01`, contributionCount: 3 }, { date: `${y}-05-02`, contributionCount: 0 }] }] } } } } }); }
+    if (a.startsWith("api users/me/repos")) return '{"fork":false,"language":"JavaScript"}\n{"fork":true,"language":"Go"}\n{"fork":false,"language":"JavaScript"}\n';
+    if (a === "api user --jq .login") return "me\n";
+    if (a.startsWith("api user/starred")) return '{"at":"2026-01-02T00:00:00Z","id":1,"name":"a/old","owner":"a","url":"https://github.com/a/old","desc":"d","topics":[],"stars":5,"lang":"Rust"}\n{"at":"2026-03-02T00:00:00Z","id":2,"name":"b/new","owner":"b","url":"https://github.com/b/new","desc":null,"topics":["ui"],"stars":9,"lang":null}\n';
+    throw new Error(`unexpected gh ${a}`);
+  };
+  const r = github("me", 500, gh);
+  assert.equal(r.series.events, 6); assert.deepEqual(Object.keys(r.series.daily), [`${year - 1}-05-01`, `${year}-05-01`]);
+  assert.deepEqual(r.series.top, [{ name: "JavaScript", n: 2 }]);
+  assert.deepEqual(r.items.map((i) => [i.id, i.title, i.date, i.why]), [["ghs-2", "b/new", "2026-03-02", "starred"], ["ghs-1", "a/old", "2026-01-02", "starred · Rust"]]);
 });

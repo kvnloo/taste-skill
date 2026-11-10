@@ -74,14 +74,19 @@ export async function mountBookmarks(A, { go }) {
     if (!m) return; S = m.size; m.ids.forEach((id, i) => spriteAt.set(id, [(i % m.cols) * S, Math.floor(i / m.cols) * S]));
     sprite = await loadImg("./data/sprite.jpg"); dirty++;
   }).catch((e) => console.error("sprite:", e));
-  // Deep zoom (gigapixel-style level of detail): 64px sprite -> 480px thumb -> <=1600px still, each fetched only when a
+  // Deep zoom (gigapixel-style level of detail): 64px sprite -> 480px thumb -> <=1600px still -> the original file at full
+  // resolution (X's upload, or a native-size video frame), each fetched only when a
   // tile is big enough on screen to need it, decoded off the main thread (createImageBitmap) so zooming never stalls.
   let hires = {};
   fetch("./data/hires.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).then((m) => { hires = m; dirty++; }).catch((e) => console.error("hires:", e));
   const bitmap = (src) => fetch(src).then((r) => { if (!r.ok) throw new Error(`${r.status} ${src}`); return r.blob(); }).then((b) => createImageBitmap(b));
-  const big = new Map(); // tile -> ImageBitmap of the <=1600px still; least recently drawn are closed past BIG_MAX
+  const big = new Map(); // tile -> ImageBitmap of the <=1600px still or the original; least recently drawn are closed past BIG_MAX
   const BIG_MAX = innerWidth <= 700 ? 12 : 40; // ~40 tiles of 240+ css px fit a desktop screen: never evict what is visible
-  const useBig = (t) => { const im = big.get(t); big.delete(t); big.set(t, im); while (big.size > BIG_MAX) { const [k, v] = big.entries().next().value; big.delete(k); v?.close?.(); k.big = null; } };
+  const useBig = (t) => { const im = big.get(t); big.delete(t); big.set(t, im); while (big.size > BIG_MAX) { const [k, v] = big.entries().next().value; big.delete(k); v?.close?.(); k.big = null; k.bigW = 0; } };
+  // Which file a tile of `dp` device pixels needs: the original once the 1600px still would be upscaled.
+  const stillFor = (h, dp) => (h.orig && dp > 1400 && (h.w ?? 9999) > 1700 ? [h.orig, h.w ?? 9999] : h.full ? [h.full, 1600] : h.orig ? [h.orig, h.w ?? 9999] : null);
+  // Clips: the 480px loop while a tile is small, the native-size loop once it is bigger than that on screen.
+  const clipFor = (h, dp) => "./data/" + (h.clip_hd && dp > 520 ? h.clip_hd : h.clip ?? h.clip_hd);
   // Videos autoplay on the canvas: muted 4 s loops (480px, local) for the few largest video tiles nearest the centre.
   // A small fixed pool of <video> elements is reused and laid over their tiles, so the compositor plays them and the
   // canvas never repaints for a video frame: the cost stays bounded however many posts are on screen.
@@ -109,9 +114,11 @@ export async function mountBookmarks(A, { go }) {
     const want = new Set(cands.slice(0, limit));
     for (const [t, v] of playing) if (!want.has(t)) { v.pause(); v.style.visibility = "hidden"; v.removeAttribute("src"); v.load(); v.tile = null; playing.delete(t); }
     for (const t of want) {
+      const v0 = playing.get(t), src = clipFor(hires[t.b.id], t.dp);
+      if (v0 && !v0.src.endsWith(src.slice(1))) { const at = v0.currentTime; v0.src = src; v0.currentTime = at; v0.play().catch((e) => { if (e.name !== "AbortError") console.error("autoplay:", e.message); }); }
       if (playing.has(t)) continue;
       const v = pool.find((x) => !x.tile); if (!v) break;
-      v.tile = t; v.src = "./data/" + hires[t.b.id].clip; playing.set(t, v);
+      v.tile = t; v.src = clipFor(hires[t.b.id], t.dp); playing.set(t, v);
       v.play().catch((e) => { if (e.name !== "AbortError") console.error("autoplay:", e.message); });
     }
   }
@@ -152,14 +159,21 @@ export async function mountBookmarks(A, { go }) {
       ctx.globalAlpha = on ? 1 : 0.06;
       const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id), h = hires[t.b.id];
       if (on && (dp > 180 || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
-      if (on && dp > 520 && px > 240 && h?.full && !t.big && bigBudget-- > 0) { t.big = "loading"; bitmap("./data/" + h.full).then((im) => { t.big = im; big.set(t, im); useBig(t); dirty++; }, (e) => { t.big = "error"; console.error("still:", e.message); }); }
-      if (on && px >= MIN_PX && h?.clip && !t.clipBad) cands.push(t);
+      const want = on && dp > 520 && px > 240 && h && stillFor(h, dp);
+      if (want && t.big !== "loading" && t.big !== "error" && (t.bigW ?? 0) < want[1] && bigBudget-- > 0) {
+        const prev = t.big; t.big = "loading";
+        bitmap("./data/" + want[0]).then((im) => { if (prev instanceof ImageBitmap) { big.delete(t); prev.close(); } t.big = im; t.bigW = want[1]; big.set(t, im); useBig(t); dirty++; },
+          (e) => { t.big = prev instanceof ImageBitmap ? prev : "error"; console.error("still:", e.message); });
+      }
+      t.dp = dp;
+      if (on && px >= MIN_PX && (h?.clip || h?.clip_hd) && !t.clipBad) cands.push(t);
       const v = playing.get(t);
       if (t.big instanceof ImageBitmap && dp > 480) { useBig(t); crop(t.big, x, y); }
+      else if (t.big === "loading" && big.has(t)) crop(big.get(t), x, y);
       else if (t.full instanceof ImageBitmap) crop(t.full, x, y);
       else if (sprite && sp && px >= 3) ctx.drawImage(sprite, sp[0], sp[1], S, S, x, y, T, T);
       else { ctx.fillStyle = t.b.rgb ?? opById[t.op].color; ctx.fillRect(x, y, T, T); }
-      if (h?.clip && on && px >= 28 && !v) { // small play mark so you can see which tiles move before they start
+      if ((h?.clip || h?.clip_hd) && on && px >= 28 && !v) { // small play mark so you can see which tiles move before they start
         ctx.globalAlpha = 0.85; ctx.fillStyle = "#000"; const r = Math.min(T * 0.12, 9 / c.s); ctx.beginPath(); ctx.arc(x + T - r * 1.6, y + r * 1.6, r, 0, 7); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(x + T - r * 1.95, y + r * 1.15); ctx.lineTo(x + T - r * 1.95, y + r * 2.05); ctx.lineTo(x + T - r * 1.15, y + r * 1.6); ctx.fill();
       }
@@ -210,12 +224,15 @@ export async function mountBookmarks(A, { go }) {
     const hero = b.video
       ? `<video class="hero" src="${esc(b.video)}" ${b.thumb ? `poster="./data/${esc(b.thumb)}"` : ""} autoplay playsinline ${gif ? "loop muted" : "controls"} preload="auto"></video>`
       : b.thumb ? `<img src="./data/${esc(b.thumb)}" alt="" class="hero" />` : "";
+    const orig = hires[b.id]?.orig ?? hires[b.id]?.full;
     box.innerHTML = `<div class="lb-card"><button class="lb-x" aria-label="Close">×</button>
       ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
       ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) || NAMED.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}${board && b.url ? `<button data-board="${esc(board.id)}" title="Add to the board: ${esc(board.title)}">+ Board: ${esc(board.title.slice(0, 28))}</button>` : ""}</div></div></div>`;
     box.classList.add("on");
+    const img = box.querySelector("img.hero");
+    if (img && orig) { const hi = new Image(); hi.decoding = "async"; hi.src = "./data/" + orig; hi.decode().then(() => { if (current === b) img.src = hi.src; }, (e) => console.error("full-res:", orig, e.message)); }
     const v = box.querySelector("video");
     if (v) {
       v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); // blocked with sound → play muted
@@ -252,7 +269,7 @@ export async function mountBookmarks(A, { go }) {
   // Shelf.
   const shelf = document.createElement("aside"); shelf.className = "shelf"; document.body.appendChild(shelf);
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
-  let layer = null; // a sources layer chip, or null for every layer
+  let layer = new URLSearchParams(location.search).get("layer"); // a sources layer chip (?layer= from History), or null for every layer
   const lib = viewOf() === "library"; // Library = this shelf as a full-screen mosaic, at /library
   let subject = null, open = lib || innerWidth > 700, wide = lib, last = null, shown = lib ? 180 : 60;
   addEventListener("taste:view", (e) => { const w = e.detail.view === "library"; if (w === wide) return; wide = w; if (w) open = true; shown = w ? 180 : 60; draw(); });
@@ -280,7 +297,7 @@ export async function mountBookmarks(A, { go }) {
       <div class="grid">${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? b.author : "@" + b.author;
         return `<a href="${esc(b.url)}" data-post="${b.id}" target="_blank" rel="noopener" title="${esc(b.text)}">
-          ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}" alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
+          ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}"${hires[b.id]?.full ? ` srcset="./data/${esc(b.thumb)} 480w, ./data/${esc(hires[b.id].full)} 1600w" sizes="${wide ? "20vw" : "160px"}"` : ""} alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
           ${b.type === "video" || b.type === "animated_gif" ? `<i class="play">▶</i>` : ""}
           <span class="meta"><em style="background:${op.color}"></em>${esc(t?.name ?? LAYERS[b.layer])} · ${esc(who)}</span></a>`;
       }).join("")}</div>${list.length > shown ? `<button class="more">Show ${Math.min(wide ? 180 : 60, list.length - shown)} more</button>` : ""}
@@ -304,5 +321,5 @@ export async function mountBookmarks(A, { go }) {
   })(0);
   draw(); go(A.view.focus, 600);
   function setQuery(q) { q = q.trim(); if (q === query) return; query = q; if (q) open = true; shown = wide ? 180 : 60; draw(); }
-  return { lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2) })), big: big.size, hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
+  return { hires: () => hires, lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

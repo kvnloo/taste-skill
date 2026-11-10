@@ -1,0 +1,20 @@
+{
+  "kind": "taste-board.v1",
+  "id": "fixture-board-1234",
+  "title": "Test Board",
+  "goal": "Test canvas functionality",
+  "created": 1731234567890,
+  "updated": 1731234567890,
+  "notes": [
+    { "id": "note1", "who": "agent", "text": "This is a test note", "t": 1731234567891 },
+    { "id": "note2", "who": "owner", "text": "Owner note", "t": 1731234567892 }
+  ],
+  "refs": [
+    { "id": "ref1", "url": "https://example.com/ref1", "title": "Reference 1", "text": "First reference", "image": "https://via.placeholder.com/300", "source": "web", "t": 1731234567893 },
+    { "id": "ref2", "url": "https://example.com/ref2", "title": "Reference 2", "text": "Second reference", "image": "https://via.placeholder.com/300", "source": "dribbble", "t": 1731234567894 }
+  ],
+  "techniques": [],
+  "palette": [],
+  "type": [],
+  "preview": null
+}

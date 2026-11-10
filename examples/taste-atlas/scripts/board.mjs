@@ -2,18 +2,20 @@
 // Taste board: a temporary live page for brainstorming a design with an agent while you talk.
 // The agent writes to the board with this CLI; the page updates within a second (server-sent events);
 // what you like/nope/pin on the page comes back through `status`. Node 22+, no dependencies.
-//   board.mjs start ["title"] [--goal "..."]      new session; starts the server if needed; prints {id,url}
-//   board.mjs say <id> "<text>" [--owner]         a note on the timeline (agent's by default)
+//   board.mjs start [\"title\"] [--goal \"...\"]      new session; starts the server if needed; prints {id,url}
+//   board.mjs say <id> \"<text>\" [--owner]         a note on the timeline (agent's by default)
 //   board.mjs push <id> '<json>'|-                merge {title,goal,techniques:[ids],palette:[hex],type:[font],refs:[..],notes:[..]}
-//   board.mjs ref <id> <url...> [--note "why"]    add references; title and picture resolved from the page
-//   board.mjs search <id> "<query>"|"*" [--from mine,portfolio,dribbble,behance,mobbin,web] [--n 6]
-//     mine = your X bookmarks + everything below; portfolio = only your own apps, sites, films, repos; "*" = all of them
-//   board.mjs techniques <id> <ids...>|"<request>"   attach atlas techniques (ids, or best matches for a request)
+//   board.mjs ref <id> <url...> [--note \"why\"]    add references; title and picture resolved from the page
+//   board.mjs search <id> \"<query>\"|\"*\" [--from mine,portfolio,dribbble,behance,mobbin,web] [--n 6]
+//     mine = your X bookmarks + everything below; portfolio = only your own apps, sites, films, repos; \"*\" = all of them
+//   board.mjs techniques <id> <ids...>|\"<request>\"   attach atlas techniques (ids, or best matches for a request)
 //   board.mjs preview <id> <file.html|dir>        show the design being built; the page reloads it on change
 //   board.mjs design <id>                         kept refs + direction -> editable .fig (OpenPencil/Figma) + PNG, link to edit
 //   board.mjs focus <id> <refIds...>|clear [--why] show only a shortlist (what a spoken filter becomes)
 //   board.mjs compare <id> <a> <b>|clear [--why]  two refs side by side; the owner picks one (keys 1 / 2)
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
+//   board.mjs canvas <id>                         print the canvas URL and shape counts
+//   board.mjs export <id> [--format canvas]       export board as JSON Canvas (.canvas) format
 // The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
 // Sessions: $TASTE_BOARD_HOME (default ~/.cache/taste-board/<id>/), pruned after 7 days idle.
@@ -54,7 +56,7 @@ const read = (d) => JSON.parse(readFileSync(join(d, "board.json"), "utf8"));
 const picks = (d) => (existsSync(join(d, "picks.jsonl")) ? readFileSync(join(d, "picks.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 function write(d, b) { b.updated = Date.now(); const f = join(d, "board.json"); writeFileSync(f + ".tmp", JSON.stringify(b, null, 1)); renameSync(f + ".tmp", f); }
 const now = () => Date.now(), slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
-// og:title / <title> / search titles arrive HTML-escaped ("Examples &amp; UI"); the page escapes again on render.
+// og:title / <title> / search titles arrive HTML-escaped ("Examples & UI"); the page escapes again on render.
 const unescape = (t) => String(t ?? "").replace(/&(amp|lt|gt|quot|#39|#x27|apos|nbsp);/g, (_, k) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'", apos: "'", nbsp: " " })[k]).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const sourceOf = (u) => { const h = host(u); return h.includes("dribbble") ? "dribbble" : h.includes("behance") ? "behance" : h.includes("mobbin") ? "mobbin" : /^(x|twitter)\.com$/.test(h) ? "x" : "web"; };
@@ -154,6 +156,13 @@ function serve() {
     if (!m) { const f = inside(app, u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }
     const d = join(HOME, m[1]), sub = m[2] ?? "/";
     if (!existsSync(join(d, "board.json"))) { res.writeHead(404, { "content-type": "text/plain" }).end(`No board ${m[1]}. Start one: board.mjs start`); return; }
+
+    // Serve canvas dist static assets (JS, CSS, etc.)
+    if (sub.startsWith("/canvas/") && sub !== "/canvas") {
+      const canvasDist = join(app, "canvas/dist");
+      const f = inside(canvasDist, sub.slice(7)); // strip /canvas/
+      if (f) return file(res, f);
+    }
     if (sub === "/") return file(res, join(app, "board.html"));
     if (sub === "/board.json") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ ...read(d), picks: picks(d) })); return; }
     if (sub === "/events") {
@@ -202,6 +211,89 @@ function serve() {
       });
       return res.writeHead(202).end();
     }
+    if (sub === "/canvas" && req.method === "POST") {  // canvas edits (move, add, etc.) persist to board.json
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const p = JSON.parse(body);
+          const b = read(d);
+          // Merge canvas refs and notes into the board
+          if (Array.isArray(p.refs)) { b.refs.push(...p.refs); }
+          if (Array.isArray(p.notes)) { b.notes.push(...p.notes); }
+          write(d, b);
+          res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
+        } catch (e) { res.writeHead(400).end(e.message); }
+      }); return;
+    }
+    if (sub === "/export" && req.method === "POST") {  // export board as JSON Canvas format
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const b = read(d);
+          // Build JSON Canvas .canvas export
+          const canvas = {
+            an: "jsoncanvas.org/",
+            version: "0.3.0",
+            shapes: [],
+            sheets: [{ shapeIdOffset: 0, shapetype: "canvas" }],
+          };
+          // Convert refs to canvas shapes
+          for (const r of b.refs) {
+            canvas.shapes.push({
+              shapeId: r.id,
+              shapeType: "image",
+              left: 100, top: 100, width: 200, height: 200,
+              url: r.image ?? r.url,
+              title: r.title,
+              note: r.text,
+            });
+          }
+          // Convert notes to canvas shapes
+          for (const n of (b.notes ?? [])) {
+            canvas.shapes.push({
+              shapeId: n.id ?? randomBytes(4).toString("hex"),
+              shapeType: "note",
+              left: 100, top: 100,
+              text: n.text,
+            });
+          }
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(canvas));
+        } catch (e) { res.writeHead(400).end(e.message); }
+      }); return;
+    }
+    if (sub === "/import" && req.method === "POST") {  // import JSON Canvas .canvas back into board
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const canvas = JSON.parse(body);
+          const d = join(HOME, m[1]);
+          const b = read(d);
+          // Clear existing and import
+          b.refs = []; b.notes = [];
+          // Convert canvas shapes back to refs and notes
+          for (const s of canvas.shapes) {
+            if (s.shapeType === "image") {
+              b.refs.push({
+                id: s.shapeId,
+                url: s.url,
+                title: s.title ?? "",
+                text: s.note ?? "",
+                image: s.url,
+                source: "canvas",
+              });
+            } else if (s.shapeType === "note") {
+              b.notes.push({
+                id: s.shapeId,
+                who: "owner",
+                text: s.text ?? "",
+              });
+            }
+          }
+          write(d, b);
+          res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true, refs: b.refs.length, notes: b.notes.length }));
+        } catch (e) { res.writeHead(400).end(e.message); }
+      }); return;
+    }
     if (sub === "/ref" && req.method === "POST") {  // a post sent from the atlas/library lightbox
       let body = ""; req.on("data", (c) => { body += c; if (body.length > 8192) req.destroy(); });
       req.on("end", () => {
@@ -216,11 +308,32 @@ function serve() {
     }
     if (sub.startsWith("/design/")) {
       const f = inside(join(d, "design"), sub.slice(7));
-      if (!f || /\/\.work(\/|$)/.test(f)) return res.writeHead(403).end();
+      if (!f || /\/\\.work(\/|$)/.test(f)) return res.writeHead(403).end();
       const cors = PENCIL ? { "access-control-allow-origin": new URL(PENCIL).origin, vary: "origin" } : {};
       return file(res, f, f.endsWith(".fig") ? { ...cors, "content-disposition": `inline; filename="${basename(f)}"` } : cors);
     }
     if (sub.startsWith("/preview/")) { const f = inside(join(d, "preview"), sub.slice(8)); return f ? file(res, f.endsWith("/") || !extname(f) ? join(f, "index.html") : f, { "content-security-policy": "frame-ancestors 'self'" }) : res.writeHead(403).end(); }
+    if (sub === "/canvas") {
+      // Serve built tldraw canvas dist, or explain how to build
+      const canvasDist = join(app, "canvas/dist");
+      if (!existsSync(canvasDist)) {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Canvas not built</title>
+<style>body{font-family:system-ui;padding:2rem;max-width:600px;margin:auto;line-height:1.6}</style>
+</head><body>
+<h1>Canvas not built</h1>
+<p>Run the build first:</p>
+<pre>cd examples/taste-atlas/canvas && npm install && npm run build</pre>
+<p>Then reload this page.</p>
+</body></html>
+        `);
+        return;
+      }
+      // Serve index.html from canvas dist
+      const f = join(canvasDist, "index.html");
+      return file(res, f);
+    }
     res.writeHead(404).end("not found");
   }).listen(PORT, "127.0.0.1", () => process.stderr.write(`taste board on ${LOCAL}\n`));
 }
@@ -345,7 +458,52 @@ switch (cmd) {
       liked: byRef("like"), pinned: byRef("pin"), noped: byRef("nope"), focus: b.focus ?? null, compare: b.compare ?? null, design: b.design ?? null,
       all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
   }
+  case "canvas": {
+    const d = dir(pos[0]), b = read(d);
+    const canvasDist = join(app, "canvas/dist");
+    const url = `${BASE}/s/${b.id}/canvas`;
+    if (!existsSync(canvasDist)) {
+      out({ ok: false, error: `Canvas not built. Run: cd examples/taste-atlas/canvas && npm run build`, url, shapes: { refs: b.refs.length, notes: b.notes.length } });
+      break;
+    }
+    out({ ok: true, url, shapes: { refs: b.refs.length, notes: b.notes.length } });
+    break;
+  }
+  case "export": {
+    const d = dir(pos[0]), b = read(d);
+    const format = opt("--format") ?? "canvas";
+    if (format !== "canvas") die(`unknown format: ${format}`);
+    // Build JSON Canvas .canvas export
+    const canvas = {
+      an: "jsoncanvas.org/",
+      version: "0.3.0",
+      shapes: [],
+      sheets: [{ shapeIdOffset: 0, shapetype: "canvas" }],
+    };
+    // Convert refs to canvas shapes
+    for (const r of b.refs) {
+      canvas.shapes.push({
+        shapeId: r.id,
+        shapeType: "image",
+        left: 100, top: 100, width: 200, height: 200,
+        url: r.image ?? r.url,
+        title: r.title,
+        note: r.text,
+      });
+    }
+    // Convert notes to canvas shapes
+    for (const n of (b.notes ?? [])) {
+      canvas.shapes.push({
+        shapeId: n.id ?? randomBytes(4).toString("hex"),
+        shapeType: "note",
+        left: 100, top: 100,
+        text: n.text,
+      });
+    }
+    out(canvas);
+    break;
+  }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;
   case "stop": try { execFileSync("pkill", ["-f", `${basename(fileURLToPath(import.meta.url))} serve`]); out({ stopped: true }); } catch { out({ stopped: false }); } break;
-  default: die(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 16).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  default: die(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 20).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
 }

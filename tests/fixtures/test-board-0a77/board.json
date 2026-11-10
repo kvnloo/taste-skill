@@ -1,0 +1,29 @@
+{
+ "kind": "taste-board.v1",
+ "id": "test-board-0a77",
+ "title": "Test Board",
+ "goal": "",
+ "created": 1794316080232,
+ "notes": [],
+ "refs": [
+  {
+   "id": "aad322b6",
+   "url": "https://example.com/test",
+   "title": "Test Ref",
+   "text": "A test reference",
+   "image": "https://example.com/test",
+   "source": "canvas"
+  },
+  {
+   "id": "new-ref",
+   "url": "https://example.com/new",
+   "title": "New Ref",
+   "text": "New reference"
+  }
+ ],
+ "techniques": [],
+ "palette": [],
+ "type": [],
+ "preview": null,
+ "updated": 1794316126921
+}

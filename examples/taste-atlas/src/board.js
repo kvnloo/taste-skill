@@ -22,6 +22,16 @@ const verdicts = () => { const m = new Map(); for (const p of board.picks ?? [])
 function renderHead() {
   $("#title").textContent = board.title; $("#goal").textContent = board.goal || "";
   document.title = `${board.title} · Taste`;
+  // Add canvas link if not already present
+  if (!$("#canvas-link")) {
+    const a = document.createElement("a");
+    a.id = "canvas-link";
+    a.href = "./canvas";
+    a.className = "atlas";  // reuse existing atlas button style
+    a.textContent = "Canvas";
+    a.title = "Open canvas view";
+    $(".bar").append(a);
+  }
 }
 
 function renderPreview() {

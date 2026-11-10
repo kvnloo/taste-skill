@@ -1,0 +1,46 @@
+{
+ "kind": "taste-board.v1",
+ "id": "canvas-test-board",
+ "title": "Canvas Test Board",
+ "goal": "Test canvas functionality",
+ "created": 1794316351597,
+ "updated": 1794316351597,
+ "notes": [
+  {
+   "id": "note1",
+   "who": "agent",
+   "text": "Test note from agent",
+   "t": 1794316350597
+  },
+  {
+   "id": "note2",
+   "who": "owner",
+   "text": "Test note from owner",
+   "t": 1794316351097
+  }
+ ],
+ "refs": [
+  {
+   "id": "ref1",
+   "url": "https://example.com/ref1",
+   "title": "Reference 1",
+   "text": "First ref",
+   "image": "https://via.placeholder.com/300",
+   "source": "web",
+   "t": 1794316349597
+  },
+  {
+   "id": "ref2",
+   "url": "https://example.com/ref2",
+   "title": "Reference 2",
+   "text": "Second ref",
+   "image": "https://via.placeholder.com/300",
+   "source": "dribbble",
+   "t": 1794316348597
+  }
+ ],
+ "techniques": [],
+ "palette": [],
+ "type": [],
+ "preview": null
+}

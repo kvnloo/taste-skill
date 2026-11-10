@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="referrer" content="no-referrer" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taste · Canvas</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/board.css" />
+<link rel="stylesheet" href="/src/nav.css" />
+<link rel="stylesheet" href="/src/canvas.css" />
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/"><span class="dot"></span>Taste</a>
+  <div class="ttl"><h1 id="title">…</h1><p id="goal"></p></div>
+  <span id="live" class="live" title="Updates as the agent writes">live</span>
+  <button id="theme" title="Toggle theme (t)">◐</button>
+</header>
+<main class="grid canvas-grid">
+  <section class="stage canvas-stage">
+    <div id="canvas-container" class="canvas-container"></div>
+  </section>
+  <aside class="talk canvas-talk">
+    <div id="design" class="design"></div>
+    <div id="canvas-controls" class="canvas-controls">
+      <button id="export-canvas" class="btn" title="Export as JSON Canvas (.canvas)">Export .canvas</button>
+      <input type="file" id="import-canvas" accept=".canvas,.json" hidden />
+      <button id="import-canvas-btn" class="btn" title="Import from JSON Canvas (.canvas)">Import .canvas</button>
+    </div>
+    <ol id="notes" class="notes"></ol>
+    <p id="agent" class="agent" hidden></p>
+    <form id="say" class="say"><button type="button" id="mic" class="mic" title="Hold to talk (or hold space)" hidden>● Talk</button><input id="sayText" placeholder="“only the dark ones”, “compare two”…" autocomplete="off" maxlength="1000" /><button>Send</button></form>
+  </aside>
+</main>
+<script type="module" src="/src/canvas.js"></script>
+</body>
+</html>

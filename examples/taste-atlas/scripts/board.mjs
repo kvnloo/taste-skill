@@ -48,6 +48,8 @@ const read = (d) => JSON.parse(readFileSync(join(d, "board.json"), "utf8"));
 const picks = (d) => (existsSync(join(d, "picks.jsonl")) ? readFileSync(join(d, "picks.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 function write(d, b) { b.updated = Date.now(); const f = join(d, "board.json"); writeFileSync(f + ".tmp", JSON.stringify(b, null, 1)); renameSync(f + ".tmp", f); }
 const now = () => Date.now(), slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
+// og:title / <title> / search titles arrive HTML-escaped ("Examples &amp; UI"); the page escapes again on render.
+const unescape = (t) => String(t ?? "").replace(/&(amp|lt|gt|quot|#39|#x27|apos|nbsp);/g, (_, k) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'", apos: "'", nbsp: " " })[k]).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const sourceOf = (u) => { const h = host(u); return h.includes("dribbble") ? "dribbble" : h.includes("behance") ? "behance" : h.includes("mobbin") ? "mobbin" : /^(x|twitter)\.com$/.test(h) ? "x" : "web"; };
 
@@ -89,6 +91,7 @@ async function resolveRef(url, note) {
     ref.title = ref.title === host(url) ? (md.match(/^Title: (.+)$/m)?.[1] ?? ref.title).slice(0, 140) : ref.title;
     ref.image = bestImage([...md.matchAll(/!\[[^\]]*\]\((https?:[^)\s]+)\)/g)].map((m) => m[1]));
   } catch (e) { process.stderr.write(`reader: ${e.message}\n`); }
+  ref.title = unescape(ref.title); ref.text = unescape(ref.text);
   return ref;
 }
 
@@ -98,7 +101,7 @@ async function exa(query, n) {
   const body = await r.text(), json = JSON.parse(body.match(/^data: (.+)$/m)?.[1] ?? body);
   if (json.error) throw new Error(`exa: ${json.error.message}`);
   const text = json.result.content.map((c) => c.text).join("\n");
-  return [...text.matchAll(/Title: (.*)\nURL: (\S+)/g)].map((m) => ({ title: m[1].trim(), url: m[2] }));
+  return [...text.matchAll(/Title: (.*)\nURL: (\S+)/g)].map((m) => ({ title: unescape(m[1].trim()), url: m[2] }));
 }
 
 function mine(query, n, layers = null) {

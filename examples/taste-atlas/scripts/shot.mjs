@@ -85,6 +85,67 @@ if (process.env.LAYERS) {
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// WORK=1: the Work layer (desktop dark + light, phone): portfolio shows every product, a real click into a product shows
+// its components, a component shows tiles with real thumbnails, clicking it again opens the proof (PRs, "You asked"),
+// a post linked from its detail view is tethered after a reload, search and #work: deep links fly there, and the layer
+// toggle hides it. The test link is removed again at the end.
+if (process.env.WORK) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], log = (k, v) => console.log(k, JSON.stringify(v));
+  const ready = async (q) => { await q.waitForFunction(() => window.__atlas?.work && window.__atlas?.bm, null, { timeout: 30000 }); await q.waitForTimeout(1800); };
+  const centre = (q, id) => q.evaluate((id) => window.__atlas.work.screen(id), id);
+  const clickNode = async (q, id, dy = 0) => { const c = await centre(q, id); await q.mouse.click(c.x, c.y + dy * c.r); await q.waitForTimeout(1300); };
+  const pg = async (vp, theme) => { const q = await b.newPage(vp); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+    await q.goto(`${base}/?theme=${theme}`); await q.evaluate(() => localStorage.removeItem("taste:hidden")); await q.reload(); await ready(q); return q; };
+  const onScreen = (q) => q.evaluate(() => { const w = window.__atlas.work; return w.data.products.filter((p) => { const s = w.screen(p.id); return s.x > 0 && s.x < innerWidth && s.y > 0 && s.y < innerHeight && s.r > 8; }).length; });
+  const q = await pg({ viewport: { width: 1440, height: 900 } }, "dark");
+  await q.evaluate(() => window.__atlas.work.focus(null)); await q.waitForTimeout(1300);
+  await q.screenshot({ path: `${out}/work-0-portfolio-dark.png` });
+  const n0 = await onScreen(q); log("portfolio products on screen", n0); if (n0 !== 7) bad.push(`portfolio shows ${n0} of 7 products`);
+  await clickNode(q, "glide", -0.85); await q.screenshot({ path: `${out}/work-1-glide-dark.png` });
+  const d1 = await q.evaluate(() => ({ focus: window.__atlas.work.state().focus, kids: window.__atlas.work.data.products.find((p) => p.id === "glide").components }));
+  log("depth 1", d1); if (d1.focus !== "glide") bad.push(`click on glide focused ${d1.focus}`);
+  await clickNode(q, "glide/taste", 0.15); await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/work-2-taste-pages-dark.png` });
+  const d2 = await q.evaluate(() => ({ focus: window.__atlas.work.state().focus, loaded: window.__atlas.work.loaded(), shelf: document.querySelector(".shelf header b")?.textContent, shelfPages: document.querySelectorAll(".shelf [data-wpage] img").length }));
+  log("depth 2", d2); if (d2.focus !== "glide/taste") bad.push(`click on Taste pages focused ${d2.focus}`); if (d2.loaded < 6) bad.push(`only ${d2.loaded} thumbnails drawn`); if (!d2.shelfPages) bad.push("shelf lists no pages");
+  // Depth 3: clicking the focused component outside its tiles (its label) opens the proof.
+  await clickNode(q, "glide/taste", -0.66); await q.waitForTimeout(500);
+  const d3 = await q.evaluate(() => ({ on: !!document.querySelector(".work-lb.on"), prs: document.querySelectorAll(".work-lb.on .wk-prs li").length, asked: document.querySelectorAll(".work-lb.on p.asked").length, pages: document.querySelectorAll(".work-lb.on .wk-thumbs img").length }));
+  await q.screenshot({ path: `${out}/work-3-proof-dark.png` }); log("depth 3", d3);
+  if (!d3.on || !d3.prs || !d3.asked) bad.push(`proof lightbox: ${JSON.stringify(d3)}`);
+  await q.keyboard.press("Escape"); await q.waitForTimeout(200);
+  await q.evaluate(() => window.__atlas.work.proof("glide")); await q.waitForTimeout(400); await q.screenshot({ path: `${out}/work-3-proof-glide-dark.png` }); await q.keyboard.press("Escape");
+  // Link a post to the component from its detail view, reload, and see it tethered on the component.
+  const item = await q.evaluate(() => window.__atlas.bm.items.find((b) => b.thumb && b.layer === "saved").id);
+  await q.evaluate((id) => window.__atlas.bm.detail(window.__atlas.bm.byId.get(id)), item); await q.waitForTimeout(400);
+  await q.selectOption(".lightbox.on [data-wpick]", "glide/taste"); await q.waitForSelector(".lightbox.on .wk-chip", { timeout: 5000 }).catch(() => bad.push("link chip never appeared"));
+  await q.screenshot({ path: `${out}/work-link-detail-dark.png` });
+  await q.goto(`${base}/?theme=dark&reload=1#work:glide/taste`); await ready(q); // new query string: a real reload, not a hash change await q.waitForTimeout(1500);
+  const tl = await q.evaluate((id) => ({ focus: window.__atlas.work.state().focus, linked: window.__atlas.work.links().some((l) => l.item === id && l.node === "glide/taste"), tethered: window.__atlas.work.tethers().some((t) => t.item === id), inShelf: !!document.querySelector(`.shelf [data-post="${id}"]`) }), item);
+  await q.screenshot({ path: `${out}/work-link-tethered-dark.png` }); log("link after reload", tl);
+  if (tl.focus !== "glide/taste") bad.push(`#work:glide/taste deep link focused ${tl.focus}`); if (!tl.linked || !tl.tethered || !tl.inShelf) bad.push(`link not shown after reload: ${JSON.stringify(tl)}`);
+  // Search finds a component; the layer toggle hides and restores the layer.
+  await q.evaluate(() => window.__atlas.go("root", 10)); await q.waitForTimeout(400);
+  await q.fill("#q", "voice"); await q.waitForTimeout(300); const hit = await q.evaluate(() => document.querySelector("#hits [data-w]")?.dataset.w);
+  await q.keyboard.press("Enter"); await q.waitForTimeout(1200); const sf = await q.evaluate(() => window.__atlas.work.state().focus);
+  log("search", { hit, focus: sf }); if (!hit || sf !== hit) bad.push(`search: hit ${hit}, focus ${sf}`);
+  await q.click('.layers [data-layer="work"]'); await q.waitForTimeout(200); const off = await q.evaluate(() => window.__atlas.work.state().visible);
+  await q.click('.layers [data-layer="work"]'); await q.waitForTimeout(200); const back = await q.evaluate(() => window.__atlas.work.state().visible);
+  log("toggle", { off, back }); if (off || !back) bad.push("layer toggle did not hide/show Work");
+  await q.evaluate((id) => fetch("/api/work-links", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ item: id, node: "glide/taste", op: "remove" }) }), item);
+  // Light theme, and a phone (390 px): no horizontal scroll, the HUD and lightbox fit.
+  const lq = await pg({ viewport: { width: 1440, height: 900 } }, "light");
+  await lq.evaluate(() => window.__atlas.work.focus("glide")); await lq.waitForTimeout(1400); await lq.screenshot({ path: `${out}/work-1-glide-light.png` });
+  await lq.evaluate(() => window.__atlas.work.focus("glide/tern-ui")); await lq.waitForTimeout(1800); await lq.screenshot({ path: `${out}/work-2-tern-ui-light.png` });
+  const m = await pg({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }, "dark");
+  for (const [name, id] of [["portfolio", null], ["glide", "glide"], ["taste-pages", "glide/taste"]]) {
+    await m.evaluate((id) => window.__atlas.work.focus(id), id); await m.waitForTimeout(1600); await m.screenshot({ path: `${out}/work-phone-${name}.png` });
+  }
+  await m.evaluate(() => window.__atlas.work.proof("glide/taste")); await m.waitForTimeout(500); await m.screenshot({ path: `${out}/work-phone-proof.png` });
+  const ph = await m.evaluate(() => ({ overflowX: document.documentElement.scrollWidth > innerWidth, hud: (() => { const r = document.querySelector(".work-hud").getBoundingClientRect(); return [r.left, r.right].map(Math.round); })(), lb: Math.round(document.querySelector(".work-lb .lb-card").getBoundingClientRect().right) }));
+  log("phone", ph); if (ph.overflowX || ph.hud[0] < 0 || ph.hud[1] > 390 || ph.lb > 390) bad.push(`phone layout: ${JSON.stringify(ph)}`);
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // DESIGN=<edit url from `board.mjs design`>: the editor fetches the board's .fig and shows its layers, with no error.
 if (process.env.DESIGN) {
   const bad = [], fig = [];
@@ -144,19 +205,19 @@ if (process.env.BOARD) {
   if (ui.refs !== 6 || ui.pair !== 2 || !ui.chip || !ui.design || !ui.directions || !ui.talk) errs.push(`talk-ui assertions failed: ${JSON.stringify(ui)}`);
   console.log("errors:", JSON.stringify(errs)); await b.close(); process.exit(errs.length ? 1 : 0);
 }
+const base = process.env.BASE ?? "http://127.0.0.1:8789";
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];
 for (const [name, hash, theme] of shots) {
-  await p.goto(`http://127.0.0.1:8789/?theme=${theme}${hash}`); await p.waitForTimeout(1800);
+  await p.goto(`${base}/?theme=${theme}${hash}`); await p.waitForTimeout(1800);
   await p.screenshot({ path: `${out}/${name}.png` });
 }
 // Interaction check: search + enter.
-await p.goto("http://127.0.0.1:8789/?theme=light"); await p.waitForTimeout(500);
+await p.goto(`${base}/?theme=light`); await p.waitForTimeout(500);
 await p.fill("#q", "closure"); await p.keyboard.press("Enter"); await p.waitForTimeout(1500);
 console.log("after search focus:", await p.evaluate(() => window.__atlas.A.view.focus), "hash:", await p.evaluate(() => location.hash));
 await p.keyboard.press("Escape"); await p.waitForTimeout(1200);
 console.log("after esc focus:", await p.evaluate(() => window.__atlas.A.view.focus));
 // Private bookmarks layer (only when ./data is present): shelf follows focus, thumbnails load.
-const base = process.env.BASE ?? "http://127.0.0.1:8789";
 await p.goto(`${base}/?theme=light`);
 if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).catch(() => null)) {
   for (const [name, id] of [["bm-root", "root"], ["bm-op", "evoke"], ["bm-tech", "tactile-surface"]]) {

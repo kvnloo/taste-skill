@@ -81,6 +81,7 @@ if (process.env.LAYERS) {
     const sr = rects[".search"]; if (!sr || sr[2] - sr[0] < 120) bad.push(`${name}: search box ${sr ? sr[2] - sr[0] : 0}px wide`);
     const cr = rects["#card"]; if (sr && cr && cr[1] < sr[3]) bad.push(`${name}: card overlaps search`);
     if (!(t1 < r0.tiles)) bad.push(`${name}: hiding LinkedIn left ${t1} of ${r0.tiles} tiles`);
+    await q.close();
   }
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
@@ -138,10 +139,11 @@ if (process.env.WORK) {
   // Stale renders as stale: push hermes-tern's last check two days back; its ring goes grey and dashed, its label says so.
   await q.evaluate(() => { const w = window.__atlas.work, p = w.data.products.find((x) => x.id === "hermes-tern"); p.status.checked -= 2 * 86400; w.focus(null); w.redraw(); });
   await q.waitForTimeout(1200); await q.screenshot({ path: `${out}/work-stale-check-dark.png` });
+  await q.close(); // one atlas tab at a time: each holds thousands of decoded tiles
   // Light theme, and a phone (390 px): no horizontal scroll, the HUD and lightbox fit.
   const lq = await pg({ viewport: { width: 1440, height: 900 } }, "light");
   await lq.evaluate(() => window.__atlas.work.focus("glide")); await lq.waitForTimeout(1400); await lq.screenshot({ path: `${out}/work-1-glide-light.png` });
-  await lq.evaluate(() => window.__atlas.work.focus("glide/tern-ui")); await lq.waitForTimeout(1800); await lq.screenshot({ path: `${out}/work-2-tern-ui-light.png` });
+  await lq.evaluate(() => window.__atlas.work.focus("glide/tern-ui")); await lq.waitForTimeout(1800); await lq.screenshot({ path: `${out}/work-2-tern-ui-light.png` }); await lq.close();
   const m = await pg({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }, "dark");
   for (const [name, id] of [["portfolio", null], ["glide", "glide"], ["taste-pages", "glide/taste"]]) {
     await m.evaluate((id) => window.__atlas.work.focus(id), id); await m.waitForTimeout(1600); await m.screenshot({ path: `${out}/work-phone-${name}.png` });

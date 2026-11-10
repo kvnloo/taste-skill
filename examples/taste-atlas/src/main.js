@@ -136,7 +136,7 @@ addEventListener("keydown", (e) => {
 });
 document.getElementById("legend").innerHTML = OPERATIONS.map((o) => `<button data-id="${o.id}"><i style="background:${o.color}"></i>${o.name}</button>`).join("");
 document.getElementById("legend").onclick = (e) => { const id = e.target.closest("[data-id]")?.dataset.id; if (id) go(id); };
-addEventListener("resize", () => { A.view.labelScale = phone() ? 0.8 : 1; if (!tween) A.view.cam = fitR(A.view.focus); });
+addEventListener("resize", () => { A.view.labelScale = phone() ? 0.8 : 1; if (!tween && !A.refit?.(1)) A.view.cam = fitR(A.view.focus); });
 addEventListener("hashchange", () => { const id = location.hash.slice(1); if (A.graph.byId.has(id) && id !== A.view.focus) go(id); });
 
 const st = stats();

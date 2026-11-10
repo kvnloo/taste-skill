@@ -362,6 +362,7 @@ export async function mountBookmarks(A, { go, fly }) {
   let subject = null, open = lib || innerWidth > 700, wide = lib, last = null, shown = lib ? 180 : 60, custom = null; // custom: a work node's pages + linked posts (src/work.js)
   addEventListener("taste:view", (e) => { const w = e.detail.view === "library"; if (w === wide) return; wide = w; if (w) open = true; shown = w ? 180 : 60; draw(); });
   const toggleWide = () => setView(wide ? "atlas" : "library");
+  const refit = () => A.refit?.() || go(A.view.focus); // the shelf changed the free area: re-fit what is in view (a Work node keeps its own)
   const under = (id) => {
     const n = A.graph.byId.get(id) ?? A.graph.root;
     const t = n.level === 4 ? n.parent : n;
@@ -394,14 +395,14 @@ export async function mountBookmarks(A, { go, fly }) {
   shelf.addEventListener("click", (e) => {
     if (e.target.closest(".clr")) { e.preventDefault(); setQuery(""); document.getElementById("q").value = ""; return; }
     if (e.target.closest(".wid")) { toggleWide(); return; }
-    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
+    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(refit, 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; if (s === "all") layer = null; shown = 60; draw(); }
     const l = e.target.closest("[data-l]")?.dataset.l; if (l) { layer = layer === l ? null : l; shown = 60; draw(); }
     if (e.target.closest(".more")) { shown += wide ? 180 : 60; draw(); }
     const post = e.target.closest("[data-post]"); if (post) { e.preventDefault(); detail(byId.get(post.dataset.post)); }
   });
   addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") toggleWide(); });
-  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
+  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(refit, 270); } });
   (function poll(now) {
     if (A.view.focus !== last) { last = A.view.focus; pickKey = null; custom = null; litFor = null; shown = 60; draw(); }
     tune(now);

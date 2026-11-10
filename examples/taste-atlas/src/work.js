@@ -222,7 +222,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   const boxOf = (id) => { const o = L.get(id) ?? { x: 0, y: 0, r: R + 14 }, m = o.r * (C.has(id) ? 1.04 : 1.12); return [o.x - m, o.y - m, o.x + m, o.y + m]; };
   function focusOn(id) {
     if (id && !L.has(id)) return;
-    hidden.delete("work"); if (bm) bm.addLayer("work", "Work", W.products.length, "#2f6fd6");
+    if (hidden.delete("work")) localStorage.setItem("taste:hidden", JSON.stringify([...hidden])); bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
     focus = id; dirty++; fly(boxOf(id ?? "disc"), 900, 24, true);
     history.replaceState(null, "", location.pathname + location.search + "#work" + (id ? ":" + id : ""));
     const nodes = id == null ? W.components : C.has(id) ? [C.get(id)] : id.endsWith(">linked") ? [] : P.get(id).components.map((x) => C.get(x));
@@ -232,6 +232,8 @@ export async function mountWork(A, { bm, fly, start = "" }) {
       n: pages.length + posts.length, html: pages.map(({ c, pg, i }) => `<a href="#" data-wpage="${esc(c.id)}|${i}" title="${esc(pg.name)}">${pg.shot ? `<img loading="lazy" src="./data/${esc(pg.shot)}" alt="" />` : `<div class="txt">${esc(pg.name)}<br><b>down</b> · ${esc(pg.code)}</div>`}<span class="meta"><em style="background:${pg.shot ? ST["on-track"][1] : ST["at-risk"][1]}"></em>${esc(pg.name)} · ${esc(c.name)}</span></a>`).join("") });
     drawHud();
   }
+  // After the shelf opens/closes or the window resizes, keep the focused Work node framed (true = handled).
+  A.refit = (ms = 600) => { if (focus === undefined) return false; fly(boxOf(focus ?? "disc"), ms, 24, true); return true; };
   const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; bm?.setCustom(null); };
 
   // Proof lightbox (depth 3): text lives only here.

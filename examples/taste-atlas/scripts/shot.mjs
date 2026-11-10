@@ -107,6 +107,9 @@ if (process.env.WORK) {
   await clickNode(q, "glide/taste", 0.15); await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/work-2-taste-pages-dark.png` });
   const d2 = await q.evaluate(() => ({ focus: window.__atlas.work.state().focus, loaded: window.__atlas.work.loaded(), shelf: document.querySelector(".shelf header b")?.textContent, shelfPages: document.querySelectorAll(".shelf [data-wpage] img").length }));
   log("depth 2", d2); if (d2.focus !== "glide/taste") bad.push(`click on Taste pages focused ${d2.focus}`); if (d2.loaded < 6) bad.push(`only ${d2.loaded} thumbnails drawn`); if (!d2.shelfPages) bad.push("shelf lists no pages");
+  // Toggling the shelf re-fits the view: a Work node keeps its focus instead of flying back to the atlas.
+  await q.keyboard.press("b"); await q.waitForTimeout(1000); const kept = await q.evaluate(() => window.__atlas.work.state().focus); await q.keyboard.press("b"); await q.waitForTimeout(1100);
+  log("shelf toggle keeps focus", kept); if (kept !== "glide/taste") bad.push(`shelf toggle moved focus to ${kept}`);
   // Depth 3: clicking the focused component outside its tiles (its label) opens the proof.
   await clickNode(q, "glide/taste", -0.66); await q.waitForTimeout(500);
   const d3 = await q.evaluate(() => ({ on: !!document.querySelector(".work-lb.on"), prs: document.querySelectorAll(".work-lb.on .wk-prs li").length, asked: document.querySelectorAll(".work-lb.on p.asked").length, pages: document.querySelectorAll(".work-lb.on .wk-thumbs img").length }));

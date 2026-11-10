@@ -10,14 +10,17 @@ const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const techById = new Map(TECHNIQUES.map((t) => [t.id, t]));
-const LAYERS = { portfolio: "Portfolio", ask: "Asked about", film: "Films", ref: "Studied", project: "Projects", idea: "Ideas" };
-const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗" };
+const LAYERS = { portfolio: "Portfolio", ask: "Asked about", film: "Films", ref: "Studied", project: "Projects", idea: "Ideas", youtube: "YouTube", spotify: "Spotify", tidal: "Tidal", music: "Music" };
+const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗", youtube: "Watch on YouTube ↗", spotify: "Play on Spotify ↗", tidal: "Play on TIDAL ↗", music: "Open ↗" };
 const OWN = new Set(["film", "idea", "portfolio"]); // your own work: show its name, not an @handle
+const NAMED = new Set(["youtube", "spotify", "tidal", "music"]); // channels and artists are names, not @handles
 const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.decoding = "async"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
 
 export async function mountBookmarks(A, { go }) {
   const get = (f) => fetch(f, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [data0, src] = await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json")]);
+  const [data0, src0, hist] = await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json"), get("./data/history.atlas.json")]);
+  // Watch/listen history (scripts/history.mjs) joins the sources layers; it is unlabelled, so it lists in the shelf.
+  const src = src0 || hist ? { ...src0, items: [...(src0?.items ?? []), ...(hist?.items ?? [])] } : null;
   if (!data0 && !src) return null;
   const data = data0 ?? { items: [], count: 0, method: src.method };
   // everything: shelf "All" includes sources not yet placed on a technique; items: what sits on the graph.
@@ -210,7 +213,7 @@ export async function mountBookmarks(A, { go }) {
     box.innerHTML = `<div class="lb-card"><button class="lb-x" aria-label="Close">×</button>
       ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
-      ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
+      ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) || NAMED.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}${board && b.url ? `<button data-board="${esc(board.id)}" title="Add to the board: ${esc(board.title)}">+ Board: ${esc(board.title.slice(0, 28))}</button>` : ""}</div></div></div>`;
     box.classList.add("on");
     const v = box.querySelector("video");
@@ -225,7 +228,7 @@ export async function mountBookmarks(A, { go }) {
     if (g) { e.preventDefault(); close(); go(g); return; }
     const bt = e.target.closest("[data-board]");
     if (bt) {
-      const b = current, ref = { url: b.url, title: OWN.has(b.layer) ? b.title ?? b.author : `@${b.author}`, text: (b.seen ?? b.text ?? "").slice(0, 280), image: b.thumb ? `/data/${b.thumb}` : null, video: b.video, source: b.layer && b.layer !== "saved" ? `mine:${b.layer}` : "mine", technique: b.technique };
+      const b = current, ref = { url: b.url, title: OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? `${b.title} · ${b.author}` : `@${b.author}`, text: (b.seen ?? b.text ?? "").slice(0, 280), image: b.thumb ? `/data/${b.thumb}` : null, video: b.video, source: b.layer && b.layer !== "saved" ? `mine:${b.layer}` : "mine", technique: b.technique };
       bt.disabled = true;
       fetch(`/s/${bt.dataset.board}/ref`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(ref) })
         .then(async (r) => { if (!r.ok) throw new Error(await r.text()); bt.outerHTML = `<a href="/s/${esc(bt.dataset.board)}/">On the board ✓ Open it</a>`; })
@@ -275,7 +278,7 @@ export async function mountBookmarks(A, { go }) {
     shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${list.slice(0, shown).map((b) => {
-        const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : "@" + b.author;
+        const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? b.author : "@" + b.author;
         return `<a href="${esc(b.url)}" data-post="${b.id}" target="_blank" rel="noopener" title="${esc(b.text)}">
           ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}" alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
           ${b.type === "video" || b.type === "animated_gif" ? `<i class="play">▶</i>` : ""}

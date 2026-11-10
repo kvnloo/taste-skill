@@ -6,7 +6,7 @@ import { mountNav, getTheme, saveTheme } from "./nav.js";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", "mine:project": "your repo", "mine:idea": "your idea", "mine:portfolio": "your work", x: "X", dribbble: "Dribbble", behance: "Behance", mobbin: "Mobbin", web: "web" };
+const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", "mine:project": "your repo", "mine:idea": "your idea", "mine:portfolio": "your work", "mine:youtube": "you watched", "mine:spotify": "you played", "mine:tidal": "you played", "mine:music": "you played", x: "X", dribbble: "Dribbble", behance: "Behance", mobbin: "Mobbin", web: "web" };
 const root = document.documentElement;
 root.dataset.theme = getTheme();
 mountNav($(".bar .brand"));

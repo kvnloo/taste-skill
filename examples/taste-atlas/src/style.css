@@ -36,9 +36,15 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .legend { position: fixed; left: 18px; bottom: 18px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 60vw; }
 .legend button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px 6px 8px; font: 500 12px Inter; display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.layers { position: fixed; left: 18px; bottom: 56px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 60vw; align-items: center; }
+.layers b { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); margin-right: 2px; }
+.layers button { border: 1px solid var(--line); background: var(--panel); color: var(--mute); border-radius: 999px; padding: 5px 10px 5px 7px; font: 500 12px Inter; display: flex; gap: 6px; align-items: center; cursor: pointer; backdrop-filter: blur(10px); text-decoration: line-through; opacity: .7; }
+.layers button.on { color: var(--ink); text-decoration: none; opacity: 1; }
+.layers button i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; } .layers button:not(.on) i { background: transparent !important; outline: 1px solid var(--mute); }
+.layers small { color: var(--mute); font: 10px "IBM Plex Mono", monospace; }
 .hint { position: fixed; right: 18px; bottom: 18px; color: var(--mute); font: 11px "IBM Plex Mono", monospace; }
 /* Film mode: chrome hidden except card, larger type. */
-body.film .chrome, body.film .legend, body.film .hint { display: none; }
+body.film .chrome, body.film .legend, body.film .layers, body.film .hint { display: none; }
 body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-origin: bottom left; }
 @media (max-width: 700px) { .card { width: calc(100% - 36px); top: auto; bottom: 60px; } .search input { width: 150px; } .hint { display: none; } }
 .card .intro .eyebrow { font: 10px "IBM Plex Mono", monospace; letter-spacing: .16em; color: var(--mute); }
@@ -82,6 +88,7 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
   .card .k { font-size: 9px; letter-spacing: .06em; }
   .card .intro h1 { font-size: 20px; margin: 4px 0; } .card .intro h1 em { font-size: 24px; } .card .intro p { display: none; } .card .intro .lv { display: none; }
   .legend, .hint { display: none; }
+  .layers { left: 0; right: 0; bottom: 64px; max-width: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 12px; } .layers button { white-space: nowrap; flex: none; }
   .shelf, .shelf.open { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 58px; border-radius: 16px 16px 0 0; border-bottom: 0; transition: height .25s; }
   .shelf.open { height: 52vh; } .shelf:not(.open) header div { display: block; }
   .shelf header { padding: 10px 14px; } .shelf header div { flex: 1; } .shelf .tog { order: 2; width: 36px; height: 36px; transform: rotate(-90deg); }
@@ -128,6 +135,7 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 @media (max-width: 700px) { .shelf .wid { order: 1; width: 36px; height: 36px; } .shelf.open.wide { left: 0; top: 58px; height: auto; border-radius: 16px 16px 0 0; } .shelf.wide .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }
 
 /* Phone header: dot + view switcher + search + theme must fit 360px. */
-@media (max-width: 700px) { .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 auto; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } #hits { width: min(280px, calc(100vw - 24px)); } }
+/* Five views fill the phone's top row, so search takes a row of its own (it was squeezed to 0 px) and the card moves under it. */
+@media (max-width: 700px) { .chrome { flex-wrap: wrap; row-gap: 8px; } .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 calc(100% - 52px); order: 5; } .card, body:not(.film) .card { top: 100px; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } #hits { width: min(280px, calc(100vw - 24px)); } }
 .bm-video-dock { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
 .bm-video-dock video { position: absolute; left: 0; top: 0; object-fit: cover; visibility: hidden; will-change: transform; background: #000; }

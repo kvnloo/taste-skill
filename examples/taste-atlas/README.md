@@ -93,6 +93,16 @@ Apple's public catalogue search for TIDAL and other CSVs (no logins). Output goe
 `data/history.atlas.json` (gitignored); re-importing one service replaces only that service.
 `node --test scripts/history.test.mjs` covers every format.
 
+### Layers: every source on one canvas
+
+The Atlas canvas carries every imported layer at once. X bookmarks and sources that have a technique sit in
+their technique's wedge. Everything else gets a sector on an outer ring, grouped by category: watch history by
+channel, GitHub stars by language, LinkedIn connections by company hub, and your work and sources by kind. The
+**Layers** bar (bottom left) turns each layer on or off; the choice is kept in `localStorage`. Search matches
+categories as well as techniques and posts: type `nvidia`, `youtube` or `rust`, pick the category, and the canvas
+flies to it, lights it and lists it in the shelf. A LinkedIn tile opens its person, with a link to their warm
+paths in Network. `LAYERS=1 node scripts/shot.mjs <dir>` checks this on desktop and phone.
+
 ### Network (LinkedIn connections)
 
 **Network** (`/network`) draws your LinkedIn connections as one canvas graph (sigma.js on WebGL, ForceAtlas2

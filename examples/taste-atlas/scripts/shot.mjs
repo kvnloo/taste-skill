@@ -52,6 +52,39 @@ if (process.env.NETWORK) {
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// LAYERS=1: the atlas canvas carries every data layer (desktop + phone): the layer bar lists them, search finds a
+// category (a LinkedIn company) and picking it fills the shelf, hiding a layer removes its tiles, and no page errors.
+if (process.env.LAYERS) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
+  for (const [name, vp] of [["layers-desk", { width: 1440, height: 900 }], ["layers-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+    await q.goto(`${base}/?theme=dark`); await q.evaluate(() => localStorage.removeItem("taste:hidden")); await q.reload();
+    await q.waitForFunction(() => window.__atlas?.bm, null, { timeout: 30000 }); await q.waitForTimeout(2500);
+    await q.screenshot({ path: `${out}/${name}.png` });
+    const r0 = await q.evaluate(() => ({ bar: [...document.querySelectorAll(".layers button")].map((x) => x.dataset.layer), tiles: window.__atlas.bm.tilesShown() }));
+    await q.fill("#q", "nvidia"); await q.waitForTimeout(400);
+    const hit = await q.evaluate(() => document.querySelector("#hits [data-g]")?.textContent ?? "");
+    await q.keyboard.press("Enter"); await q.waitForTimeout(1500);
+    await q.screenshot({ path: `${out}/${name}-category.png` });
+    const shelf = await q.evaluate(() => document.querySelector(".shelf header b")?.textContent ?? "");
+    const view = await q.evaluate(() => location.pathname);
+    if (view !== "/") bad.push(`${name}: picking a category left the canvas for ${view}`);
+    await q.evaluate(() => document.querySelector('.layers [data-layer="linkedin"]').click()); await q.waitForTimeout(300);
+    const t1 = await q.evaluate(() => window.__atlas.bm.tilesShown());
+    await q.evaluate(() => window.__atlas.go("root")); await q.waitForTimeout(1200);
+    await q.screenshot({ path: `${out}/${name}-hidden.png` });
+    const rects = await q.evaluate(() => Object.fromEntries([".layers", ".legend", ".shelf", "#card", ".search"].map((s) => { const e = document.querySelector(s), r = e?.getBoundingClientRect(); return [s, r && getComputedStyle(e).display !== "none" ? [r.left, r.top, r.right, r.bottom].map(Math.round) : null]; })));
+    await q.evaluate(() => localStorage.removeItem("taste:hidden"));
+    console.log(name, JSON.stringify({ ...r0, hit, shelf, hiddenTiles: t1, rects }));
+    for (const l of ["saved", "youtube", "github", "linkedin"]) if (!r0.bar.includes(l)) bad.push(`${name}: no ${l} layer toggle`);
+    if (!/nvidia/i.test(hit)) bad.push(`${name}: search found no NVIDIA category`); if (!/LinkedIn · NVIDIA/.test(shelf)) bad.push(`${name}: shelf not on the picked category ("${shelf}")`);
+    const sr = rects[".search"]; if (!sr || sr[2] - sr[0] < 120) bad.push(`${name}: search box ${sr ? sr[2] - sr[0] : 0}px wide`);
+    const cr = rects["#card"]; if (sr && cr && cr[1] < sr[3]) bad.push(`${name}: card overlaps search`);
+    if (!(t1 < r0.tiles)) bad.push(`${name}: hiding LinkedIn left ${t1} of ${r0.tiles} tiles`);
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // DESIGN=<edit url from `board.mjs design`>: the editor fetches the board's .fig and shows its layers, with no error.
 if (process.env.DESIGN) {
   const bad = [], fig = [];

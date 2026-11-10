@@ -25,8 +25,16 @@ const MAX_ZOOM = 24;
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 let tween = null;
+// Fit a world box [x0, y0, x1, y1] (a layer or category on the outer ring) into the free region.
+function fitBox([x0, y0, x1, y1]) { const R = region(), pad = 0.86; return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.min((R.w * pad) / (x1 - x0), (R.h * pad) / (y1 - y0), 2.2), cx: R.x + R.w / 2, cy: R.y + R.h / 2 }; }
+function fly(box, ms = 900) { flyTo(fitBox(box), ms); }
 function go(id, ms = 900) {
-  const from = { cx: innerWidth / 2, cy: innerHeight / 2, ...A.view.cam }, to = fitR(id);
+  window.__atlas?.bm?.pick(null, true);
+  flyTo(fitR(id), ms, id);
+}
+function flyTo(to, ms, id) {
+  const from = { cx: innerWidth / 2, cy: innerHeight / 2, ...A.view.cam };
+  if (id === undefined) { tween = { t0: performance.now(), ms, from, to, dip: Math.min(1, Math.hypot(to.x - from.x, to.y - from.y) / 1400) * 0.35 }; return; }
   A.view.focus = id; A.view.hover = null;
   if (id !== "root" && !location.hash.endsWith(id)) history.replaceState(null, "", "#" + id);
   if (id === "root") history.replaceState(null, "", location.pathname + location.search);
@@ -90,23 +98,26 @@ let sel = 0, found = [];
 function show() {
   const s = q.value.trim().toLowerCase();
   // Taxonomy nodes first, then your posts (text + picture description); the shelf filters live as you type.
-  const bm = window.__atlas.bm, posts = s && bm ? bm.matching(s).length : 0;
+  const bm = window.__atlas.bm, posts = s && bm ? bm.matching(s).length : 0, cats = s && bm ? bm.findGroups(s) : [];
   bm?.setQuery(s);
   found = s ? all.filter((n) => n.name.toLowerCase().includes(s) || (n.mech ?? "").toLowerCase().includes(s)).slice(0, 6) : [];
-  if (posts) found.unshift({ lib: posts });
+  // Categories (a layer, channel, language or company) first: picking one keeps you on the canvas.
+  found = [...cats.map((g) => ({ g })), ...(posts ? [{ lib: posts }] : []), ...found].slice(0, 10);
   sel = 0;
   hits.className = s ? "on" : "";
-  hits.innerHTML = found.map((n, i) => n.lib
+  hits.innerHTML = found.map((n, i) => n.g
+    ? `<div data-g="${n.g.key.replace(/"/g, "&quot;")}" class="${i === sel ? "sel" : ""}">${n.g.name.replace(/</g, "&lt;")}<small>${n.g.sub} · ${n.g.n.toLocaleString()}</small></div>`
+    : n.lib
     ? `<div data-lib="1" class="lib ${i === sel ? "sel" : ""}">${n.lib} of your posts<small>show in Library ↵</small></div>`
     : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
 }
-const pickHit = (h) => { if (!h) return; if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
+const pickHit = (h) => { if (!h) return; if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
 q.addEventListener("input", show);
 q.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { sel = (sel + (e.key === "ArrowDown" ? 1 : found.length - 1)) % Math.max(1, found.length); [...hits.children].forEach((d, i) => d.classList.toggle("sel", i === sel)); e.preventDefault(); }
   if (e.key === "Enter") pickHit(found[sel]);
 });
-hits.addEventListener("click", (e) => { const d = e.target.closest("[data-id],[data-lib]"); if (d) pickHit(d.dataset.lib ? found.find((h) => h.lib) : found.find((h) => h.id === d.dataset.id)); });
+hits.addEventListener("click", (e) => { const d = e.target.closest("[data-id],[data-lib],[data-g]"); if (d) pickHit(d.dataset.g ? found.find((h) => h.g?.key === d.dataset.g) : d.dataset.lib ? found.find((h) => h.lib) : found.find((h) => h.id === d.dataset.id)); });
 
 // Theme, keys, legend.
 const theme = (t) => { A.view.theme = t; saveTheme(t); };
@@ -142,5 +153,5 @@ card.addEventListener("click", async (e) => {
   b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
-mountBookmarks(A, { go }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; });
+mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; });
 requestAnimationFrame(frame);

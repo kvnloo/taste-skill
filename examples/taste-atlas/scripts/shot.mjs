@@ -75,6 +75,25 @@ if (await p.waitForFunction(() => window.__atlas?.bm, null, { timeout: 15000 }).
   await p.screenshot({ path: `${out}/bm-detail.png` }); await p.keyboard.press("Escape");
   console.log("svg transform mid-wheel:", await p.evaluate(() => document.getElementById("atlas").style.transform || "(committed)"));
   console.log("stat:", await p.evaluate(() => document.getElementById("stat").textContent));
+  // Sources layer (data/sources.atlas.json): each layer chip filters the shelf; an ask opens with what you asked.
+  if (await p.evaluate(() => window.__atlas.bm.sources)) {
+    await p.evaluate(() => window.__atlas.go("root", 10)); await p.waitForTimeout(1200);
+    const src = await p.evaluate(async () => {
+      const r = {}, wait = (ms) => new Promise((x) => setTimeout(x, ms));
+      for (const b of document.querySelectorAll(".shelf [data-l]")) {
+        const l = b.dataset.l; document.querySelector(`.shelf [data-l="${l}"]`).click(); await wait(150);
+        r[l] = [document.querySelector(".shelf header b").textContent, document.querySelectorAll(".shelf .grid a").length];
+      }
+      document.querySelector('.shelf [data-l="ask"]').click(); await wait(150);
+      document.querySelector(".shelf .grid a[data-post]").click(); await wait(400);
+      r.askDetail = [!!document.querySelector(".lightbox.on .asked"), document.querySelector(".lightbox.on .lb-act a")?.textContent ?? null];
+      return r;
+    });
+    await p.screenshot({ path: `${out}/src-ask.png` }); await p.keyboard.press("Escape");
+    await p.evaluate(() => document.querySelector('.shelf [data-l="film"]').click()); await p.waitForTimeout(800);
+    await p.screenshot({ path: `${out}/src-films.png` });
+    console.log("sources:", JSON.stringify(src));
+  }
 }
 // Phone viewport (MOBILE=1): overview, technique, shelf open.
 if (process.env.MOBILE) {

@@ -7,7 +7,7 @@
 //   node atlas.mjs suggest "<request>"          techniques that fit a free-text design request
 //   node atlas.mjs brief <id...> [--component] [--md]   build brief for a site (default) or a UI component
 // ids: technique (closure), specimen (closure--2), domain (infer/grouping) or operation (infer).
-// Bookmarks: $ATLAS_DATA/bookmarks.atlas.json (default ../data). Private; never commit it.
+// Bookmarks and sources: $ATLAS_DATA/{bookmarks,sources}.atlas.json (default ../data). Private; never commit them.
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,8 +15,10 @@ import { TECHNIQUES } from "../src/taxonomy.js";
 import { brief, briefMarkdown, suggest, taxonomyExport, techniqueRecord, techniquesFor } from "../src/brief.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dataFile = join(process.env.ATLAS_DATA ?? join(here, "../data"), "bookmarks.atlas.json");
-const rows = existsSync(dataFile) ? JSON.parse(readFileSync(dataFile, "utf8")).items.filter((b) => b.technique) : [];
+const dataDir = process.env.ATLAS_DATA ?? join(here, "../data");
+const load = (f) => (existsSync(join(dataDir, f)) ? JSON.parse(readFileSync(join(dataDir, f), "utf8")).items.filter((b) => b.technique) : []);
+// sources.atlas.json (scripts/sources.mjs): asks, films, projects and ideas, placed on techniques the same way.
+const rows = [...load("bookmarks.atlas.json"), ...load("sources.atlas.json")];
 const refsFor = (id) => rows.filter((b) => b.technique === id).sort((a, b) => !a.thumb - !b.thumb || (b.score ?? 0) - (a.score ?? 0));
 
 const [cmd, ...rest] = process.argv.slice(2);

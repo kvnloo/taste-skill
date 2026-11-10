@@ -129,5 +129,5 @@ card.addEventListener("click", async (e) => {
   b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
-mountBookmarks(A, { go }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks`; window.__atlas.bm = bm; });
+mountBookmarks(A, { go }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; });
 requestAnimationFrame(frame);

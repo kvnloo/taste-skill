@@ -38,6 +38,9 @@ buttons for the focused node, and `window.__atlas.brief([ids], "site"|"component
 
 - References are the owner's private bookmarks: link them in local briefs only; never paste their
   text, images or URLs into a public repo, issue or post.
-- Bookmark labels come from zero-shot CLIP and are estimates; treat a reference as a lead to look
-  at, not proof that it shows the technique.
+- Labels come from a vision-model teacher (image + text) and are estimates; treat a reference as a
+  lead to look at, not proof that it shows the technique.
+- References include "sources" (`layer` field): `ask` = something the owner asked to recreate or
+  triage (his words are in `text`, the post in `post`), `film` = a video he made, `project`/`idea` =
+  his own work. When a brief cites an `ask`, re-read what he asked before building.
 - `node atlas.mjs export` is the stable machine-readable taxonomy (`taste-atlas.taxonomy.v1`).

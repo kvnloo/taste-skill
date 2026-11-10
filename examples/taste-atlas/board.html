@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<!-- Reference pictures come from X, Dribbble and Behance CDNs, which refuse foreign referrers. -->
+<meta name="referrer" content="no-referrer" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taste board</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/atlas/src/board.css" />
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="dot"></span>Taste board</div>
+  <div class="ttl"><h1 id="title">…</h1><p id="goal"></p></div>
+  <span id="live" class="live" title="Updates as the agent writes">live</span>
+  <a class="atlas" href="/atlas/index.html" target="_blank" rel="noopener">Atlas ↗</a>
+  <button id="theme" title="Toggle theme (t)">◐</button>
+</header>
+<main class="grid">
+  <section class="stage">
+    <div id="preview" class="preview empty"><p>The design shows up here as soon as the agent builds a first pass.</p></div>
+    <div id="direction" class="direction"></div>
+  </section>
+  <section class="refs">
+    <nav id="filters" class="filters"></nav>
+    <div id="wall" class="wall"></div>
+  </section>
+  <aside class="talk">
+    <ol id="notes" class="notes"></ol>
+    <form id="say" class="say"><input id="sayText" placeholder="Note for the agent…" autocomplete="off" maxlength="500" /><button>Send</button></form>
+  </aside>
+</main>
+<script type="module" src="/atlas/src/board.js"></script>
+</body>
+</html>

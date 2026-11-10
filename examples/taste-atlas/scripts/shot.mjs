@@ -7,6 +7,24 @@ const out = process.argv[2] ?? ".";
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// BOARD=<board session url>: check the taste board instead (desktop + phone, live update lag, a pin round-trip), then exit.
+if (process.env.BOARD) {
+  const { execFileSync } = await import("node:child_process");
+  const id = process.env.BOARD.match(/\/s\/([a-z0-9-]+)/)[1], cli = new URL("./board.mjs", import.meta.url).pathname;
+  for (const [name, vp] of [["board-desk", { width: 1600, height: 1000 }], ["board-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+    await q.goto(process.env.BOARD); await q.waitForSelector(".ref"); await q.waitForFunction(() => document.querySelector("#live.on"), null, { timeout: 5000 });
+    const n = await q.$$eval(".notes li:not(.hint)", (l) => l.length), t0 = Date.now();
+    execFileSync(process.execPath, [cli, "say", id, `live check ${name}`], { stdio: ["ignore", "ignore", "inherit"] });
+    await q.waitForFunction((n) => document.querySelectorAll(".notes li:not(.hint)").length > n, n, { timeout: 5000 });
+    const lag = Date.now() - t0;
+    await q.click(".ref .acts [data-v=pin]", { force: true }); await q.waitForSelector(".ref.pin", { timeout: 3000 });
+    await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/${name}.png`, fullPage: name === "board-phone" });
+    console.log(name, JSON.stringify(await q.evaluate((lag) => ({ lagMs: lag, refs: document.querySelectorAll(".ref").length, pinned: document.querySelectorAll(".ref.pin").length, broken: [...document.querySelectorAll(".ref img")].filter((i) => i.complete && !i.naturalWidth).length, preview: !!document.querySelector("iframe.frame.in"), overflowX: document.documentElement.scrollWidth > innerWidth }), lag)));
+    await q.click(".ref.pin .acts [data-v=pin]", { force: true }); await q.waitForTimeout(300);
+  }
+  console.log("errors:", JSON.stringify(errs)); await b.close(); process.exit(errs.length ? 1 : 0);
+}
 const shots = [["root", "", "light"], ["op", "#differentiate", "light"], ["tech", "#color-isolation", "light"], ["exec", "#tactile-surface--2", "dark"], ["hud", "#instrument-language", "dark"]];
 for (const [name, hash, theme] of shots) {
   await p.goto(`http://127.0.0.1:8787/?theme=${theme}${hash}`); await p.waitForTimeout(1800);

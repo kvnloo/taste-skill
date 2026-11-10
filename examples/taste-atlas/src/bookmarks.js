@@ -9,8 +9,9 @@ const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const techById = new Map(TECHNIQUES.map((t) => [t.id, t]));
-const LAYERS = { ask: "Asked about", film: "Films", project: "Projects", idea: "Ideas" };
-const OPEN = { ask: "Open source ↗", film: "Open film ↗", project: "Open on GitHub ↗", idea: "Open ↗" };
+const LAYERS = { portfolio: "Portfolio", ask: "Asked about", film: "Films", project: "Projects", idea: "Ideas" };
+const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", project: "Open on GitHub ↗", idea: "Open ↗" };
+const OWN = new Set(["film", "idea", "portfolio"]); // your own work: show its name, not an @handle
 const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.decoding = "async"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
 
 export async function mountBookmarks(A, { go }) {
@@ -141,7 +142,7 @@ export async function mountBookmarks(A, { go }) {
     box.innerHTML = `<div class="lb-card"><button class="lb-x" aria-label="Close">×</button>
       ${hero}${media}
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
-      ${body}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${b.layer === "film" || b.layer === "idea" ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
+      ${body}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}</div></div></div>`;
     box.classList.add("on");
     const v = box.querySelector("video");
@@ -190,7 +191,7 @@ export async function mountBookmarks(A, { go }) {
     shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>YOUR TASTE</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="Mosaic view (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${list.slice(0, shown).map((b) => {
-        const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = b.layer === "film" || b.layer === "idea" ? b.title ?? b.author : "@" + b.author;
+        const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : "@" + b.author;
         return `<a href="${esc(b.url)}" data-post="${b.id}" target="_blank" rel="noopener" title="${esc(b.text)}">
           ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}" alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
           ${b.type === "video" || b.type === "animated_gif" ? `<i class="play">▶</i>` : ""}

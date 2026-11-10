@@ -34,6 +34,21 @@ The owner can also hand you a brief: the atlas card has "Copy site brief" and "C
 buttons for the focused node, and `window.__atlas.brief([ids], "site"|"component")` returns the JSON
 (`kind: taste-atlas.brief.v1`).
 
+## Live brainstorm board
+
+When the owner wants to brainstorm a design with you while you talk, open a temporary board and
+keep it updated; the page refreshes within a second of each write. CLI: `scripts/board.mjs`.
+
+1. `node board.mjs start "<project>" --goal "<one line>"` → `{id, url}`. Send him the url (set
+   `TASTE_BOARD_URL` to the tailnet address first); inside a Tern pane it docks beside the chat.
+2. Pull references as the talk moves: `search <id> "<query>" --from mine,portfolio,dribbble,behance,mobbin`
+   (`mine` = his bookmarks and sources, `portfolio` = his own apps, sites, films, repos; `"*"` = all),
+   `ref <id> <url...> --note "why"` for links he names, `techniques <id> "<request>"` for atlas picks,
+   `push <id> '{"palette":[...],"type":[...]}'` and `say <id> "<short note>"`.
+3. Build a first pass early and `preview <id> <file.html|dir>`; re-run it after every change.
+4. Read `status <id>` before each next step: liked, pinned and noped references and his typed notes
+   steer the design. Pinned beats liked; never bring back a noped reference.
+
 ## Rules
 
 - References are the owner's private bookmarks: link them in local briefs only; never paste their
@@ -42,5 +57,6 @@ buttons for the focused node, and `window.__atlas.brief([ids], "site"|"component
   lead to look at, not proof that it shows the technique.
 - References include "sources" (`layer` field): `ask` = something the owner asked to recreate or
   triage (his words are in `text`, the post in `post`), `film` = a video he made, `project`/`idea` =
-  his own work. When a brief cites an `ask`, re-read what he asked before building.
+  his own work, `portfolio` = an app from his portfolio (`site`, `repo`, `cat`). When a brief cites an
+  `ask`, re-read what he asked before building.
 - `node atlas.mjs export` is the stable machine-readable taxonomy (`taste-atlas.taxonomy.v1`).

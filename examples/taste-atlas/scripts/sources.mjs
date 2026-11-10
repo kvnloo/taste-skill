@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build the "sources" layer: things you asked an agent to recreate, films you made, and your own GitHub
 // projects and ideas. Each item is placed on a technique (best text match) and shows beside your bookmarks.
-//   node scripts/sources.mjs [--asks asks.jsonl] [--films films.jsonl] [--projects projects.json] [--labels labels.jsonl]
+//   node scripts/sources.mjs [--asks asks.jsonl] [--films films.jsonl] [--projects projects.json] [--portfolio apps.json] [--labels labels.jsonl]
 // --labels: {id, techniques:[...], seen} per line, e.g. from taste/scripts/label_bookmarks_teacher.py run on these
 // items. Unlabelled items stay off the graph and list under "All" in the shelf; keyword matching was tried and is noise.
 // Writes $ATLAS_DATA/sources.atlas.json (default ../data, gitignored) and thumbnails into data/thumbs/.
@@ -11,6 +11,7 @@
 //   projects: {"github": "<user>", "repos": 12, "only"?: [names, forks allowed], "ideas": [{"title", "text", "url"?, "image"?}]}  see sources.example.json
 // reuse-checked: scripts/atlas.mjs -- agent CLI over the taxonomy; this only builds data. bookmark sync -- X saves only.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,7 +30,11 @@ async function json(url, headers = {}) {
 async function save(url, name) {
   const file = join(data, "thumbs", name);
   if (existsSync(file)) return `thumbs/${name}`;
-  try { const r = await fetch(url); if (!r.ok) return null; writeFileSync(file, Buffer.from(await r.arrayBuffer())); return `thumbs/${name}`; } catch { return null; }
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`${r.status}`);
+    writeFileSync(file, Buffer.from(await r.arrayBuffer())); return `thumbs/${name}`;
+  } catch (e) { process.stderr.write(`thumb ${name}: ${e.message} ${url}\n`); return null; }
 }
 function place(item, layer) {
   const l = labels.get(item.id), [a, b] = l?.techniques ?? [];
@@ -81,7 +86,39 @@ async function projects() {
   return out;
 }
 
-const items = [...(await asks()), ...films(), ...(await projects())];
+// Portfolio: the app-store style apps.json (apps with tagline, about, repo, live/prototype site, films with posters).
+// One item per app; its picture is the newest film poster, else the repo's GitHub card.
+async function portfolio() {
+  const f = arg("--portfolio"); if (!f) return [];
+  if (!existsSync(f)) throw new Error(`--portfolio ${f} not found`);
+  const root = dirname(f).replace(/\/data$/, ""), out = [], abs = (u) => (/^https?:\/\//.test(u ?? "") ? u : null);
+  for (const a of JSON.parse(readFileSync(f, "utf8")).apps) {
+    const film = [...(a.films ?? [])].sort((x, y) => (y.date ?? "").localeCompare(x.date ?? ""))[0], site = abs(a.live) ?? abs(a.prototype);
+    let thumb = null;
+    const poster = film?.poster && join(root, film.poster);
+    if (poster && existsSync(poster)) { const n = `app-${a.id}${extname(poster)}`; copyFileSync(poster, join(data, "thumbs", n)); thumb = `thumbs/${n}`; }
+    else if (site) thumb = shoot(site, `app-${a.id}.png`);
+    if (!thumb && a.repo?.startsWith("https://github.com/")) thumb = await save(`https://opengraph.githubassets.com/1/${a.repo.slice(19)}`, `app-${a.id}.png`);
+    out.push(place({
+      id: `app-${a.id}`, url: site || a.repo || (film ? `https://github.com/kvnloo/launch-videos/tree/main/films/${film.id}` : ""), title: a.name, author: "you", type: site ? "site" : "repo",
+      text: `${a.name} (${a.cat}). ${a.tagline ?? ""} ${a.about ?? ""}`.trim(), cat: a.cat, repo: a.repo ?? null, site,
+      films: (a.films ?? []).length, thumb,
+    }, "portfolio"));
+  }
+  return out;
+}
+// A live site with no film poster: screenshot it with headless Chrome ($CHROME), no extra dependencies.
+function shoot(url, name) {
+  const file = join(data, "thumbs", name);
+  if (existsSync(file)) return `thumbs/${name}`;
+  try {
+    execFileSync(process.env.CHROME ?? "google-chrome-stable", ["--headless=new", "--hide-scrollbars", "--window-size=1280,800", "--virtual-time-budget=6000", `--screenshot=${file}`, url], { timeout: 45000, stdio: ["ignore", "ignore", "pipe"] });
+    if (!existsSync(file)) throw new Error("no file written");
+    return `thumbs/${name}`;
+  } catch (e) { process.stderr.write(`screenshot ${url}: ${String(e.stderr || e.message).trim().split("\n").pop()}\n`); return null; }
+}
+
+const items = [...(await asks()), ...films(), ...(await projects()), ...(await portfolio())];
 const out = join(data, "sources.atlas.json");
 writeFileSync(out, JSON.stringify({ kind: "taste-atlas.sources.v1", method: labels.size ? "teacher labels (image + text)" : "unlabelled", count: items.length, items }, null, 1));
 const by = items.reduce((m, i) => ((m[i.layer] = (m[i.layer] ?? 0) + 1), m), {});

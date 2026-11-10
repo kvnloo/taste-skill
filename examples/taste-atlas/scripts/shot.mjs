@@ -27,6 +27,31 @@ if (process.env.HISTORY) {
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// NETWORK=1: check /network (desktop + phone): the graph draws every imported node, a company click opens its
+// warmest way in, search finds a company, and the page logs no errors.
+if (process.env.NETWORK) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
+  for (const [name, vp] of [["network-desk", { width: 1440, height: 900 }], ["network-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+    await q.goto(`${base}/network?theme=dark`); await q.waitForFunction(() => window.__network, null, { timeout: 30000 });
+    const r = await q.evaluate(async () => {
+      const { graph, data, focus } = window.__network, co = data.nodes.filter((n) => n.type === "company").sort((a, b) => b.reach - a.reach)[0];
+      const drawn = [...document.querySelectorAll("#graph canvas")].some((c) => c.width > 0);
+      focus(co.id, false); const card = document.querySelector("#card").textContent;
+      const q = document.querySelector("#q"); q.value = co.label; q.dispatchEvent(new Event("input"));
+      return { nodes: graph.order, want: data.nodes.length, drawn, co: co.label, card: card.includes("Best way in") && card.includes(co.label), hit: document.querySelector("#hits div")?.textContent.includes(co.label) };
+    });
+    console.log(name, JSON.stringify({ ...r, co: undefined }));
+    if (r.nodes !== r.want) bad.push(`${name}: ${r.nodes} of ${r.want} nodes`);
+    if (!r.drawn) bad.push(`${name}: no canvas`); if (!r.card) bad.push(`${name}: company card has no way in`); if (!r.hit) bad.push(`${name}: search missed the company`);
+    await q.keyboard.press("Escape"); await q.locator("#q").fill(""); await q.waitForTimeout(900);
+    await q.screenshot({ path: `${out}/${name}.png` });
+    await q.evaluate(() => window.__network.focus(window.__network.data.nodes.filter((n) => n.type === "company").sort((a, b) => b.reach - a.reach)[0].id)); await q.waitForTimeout(1000);
+    await q.screenshot({ path: `${out}/${name}-company.png` });
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // DESIGN=<edit url from `board.mjs design`>: the editor fetches the board's .fig and shows its layers, with no error.
 if (process.env.DESIGN) {
   const bad = [], fig = [];

@@ -93,6 +93,25 @@ Apple's public catalogue search for TIDAL and other CSVs (no logins). Output goe
 `data/history.atlas.json` (gitignored); re-importing one service replaces only that service.
 `node --test scripts/history.test.mjs` covers every format.
 
+### Network (LinkedIn connections)
+
+**Network** (`/network`) draws your LinkedIn connections as one canvas graph (sigma.js on WebGL, ForceAtlas2
+layout from graphology): you in the middle, connections pulled closer the warmer they are, companies as hubs of
+the people who work there. Click a company for its warmest way in (*You → person → company*) and everyone there,
+ranked; click a person for a warmer colleague who could introduce you, who they share threads with, and their
+profile. Your own card ranks companies by reach and lists the ones you worked at.
+
+```sh
+node scripts/network.mjs Basic_LinkedInDataExport_<date>.zip   # or the unzipped folder
+```
+
+Get the export from LinkedIn → Settings → Data privacy → *Get a copy of your data* (the *larger data archive*
+includes messages, which is what makes warmth meaningful). Nothing is scraped. Warmth counts messages (more
+for two-way and recent conversations), endorsements and invitation notes; emails, phone numbers and message
+text are never written out. LinkedIn exports only your first-degree connections, so friends of friends are
+the ones your own data shows: people in a group thread with a connection, and pending invitations to you.
+Output goes to `data/network.atlas.json` (gitignored). `node --test scripts/network.test.mjs` covers the importer.
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from
@@ -105,7 +124,8 @@ builder (`src/brief.js`) backs the card's "Copy site brief" / "Component brief" 
 `node scripts/shot.mjs <dir>` screenshots key states, runs the feature journeys and asserts the
 canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
 `HISTORY=1 node scripts/shot.mjs <dir>` checks `/history` on desktop and phone (a card per source, calendars
-drawn, every cover loads). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
+drawn, every cover loads). `NETWORK=1 node scripts/shot.mjs <dir>` checks `/network` the same way (every node
+drawn, a company card shows its way in, search finds it). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;

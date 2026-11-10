@@ -114,6 +114,7 @@ export async function shootPages(pages, { dir, pw = process.env.PW_FROM ?? "/mnt
     try {
       await q.goto(p.local ? pathToFileURL(p.local).href : `${p.url}${p.url.includes("?") ? "&" : "?"}theme=dark`, { waitUntil: "load", timeout: 15000 });
       await q.waitForTimeout(p.local ? 200 : 2500);
+      if (p.seek != null) { await q.evaluate((t) => window.seek?.(t), p.seek); await q.waitForTimeout(300); } // frame-by-frame pages (film.html): a real frame, not t=0
       await q.screenshot({ path: join(dir, file), type: "jpeg", quality: 72 });
       return file;
     } catch (e) { process.stderr.write(`work: shot ${p.name}: ${e.message.split("\n")[0]}\n`); return null; } finally { await q.close(); }

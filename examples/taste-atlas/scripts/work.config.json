@@ -33,7 +33,7 @@
             { "name": "Boards", "url": "http://127.0.0.1:8789/boards" },
             { "name": "Network", "url": "http://127.0.0.1:8789/network" },
             { "name": "History", "url": "http://127.0.0.1:8789/history" },
-            { "name": "Film", "url": "http://127.0.0.1:8789/film.html" },
+            { "name": "Film", "url": "http://127.0.0.1:8789/film.html", "seek": 8 },
             { "name": "Board: glide hackathon", "url": "http://127.0.0.1:8789/s/glide-hackathon-project--e170/" },
             { "name": "Status board", "url": "http://127.0.0.1:8789/s/glide-hackathon-project--e170/preview/" }
           ] },

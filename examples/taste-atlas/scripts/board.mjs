@@ -105,8 +105,8 @@ async function exa(query, n) {
 }
 
 function mine(query, n, layers = null) {
-  const files = ["bookmarks.atlas.json", "sources.atlas.json"].map((f) => join(DATA, f)).filter(existsSync);
-  if (!files.length) throw new Error(`no bookmarks.atlas.json or sources.atlas.json in ${DATA} (set $ATLAS_DATA)`);
+  const files = ["bookmarks.atlas.json", "sources.atlas.json", "history.atlas.json"].map((f) => join(DATA, f)).filter(existsSync);
+  if (!files.length) throw new Error(`no bookmarks.atlas.json, sources.atlas.json or history.atlas.json in ${DATA} (set $ATLAS_DATA)`);
   const rows = files.flatMap((f) => JSON.parse(readFileSync(f, "utf8")).items).filter((b) => !layers || layers.includes(b.layer));
   const words = (query.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2);
   const techs = new Set(suggest(query, 3).map((t) => t.id)), all = query.trim() === "*";

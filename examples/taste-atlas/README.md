@@ -57,6 +57,26 @@ Items are placed on techniques only from `--labels` (`{id, techniques, seen}` pe
 teacher labeller in `products/taste` run on these items); unlabelled items stay off the ring and list
 under "All". The owner's asks and films come from `products/taste/scripts/export_owner_sources.py`.
 
+### Watch and listen history
+
+Import what you keep coming back to on YouTube, Spotify and TIDAL. Each service gets its own chip in the
+library and its items are searchable from boards (`board.mjs search … --from mine`).
+
+```sh
+node scripts/history.mjs <export>... [--top 300]
+```
+
+| Service | Where to get the export | What counts |
+| --- | --- | --- |
+| YouTube | [Google Takeout](https://takeout.google.com) → *My Activity* → YouTube (`MyActivity.html` or `.json`) | likes and videos watched 2+ times; dislikes dropped |
+| Spotify | [Account privacy](https://www.spotify.com/account/privacy/) → *Extended streaming history* (`Streaming_History_Audio_*.json`) or *Account data* (`StreamingHistory_music_*.json`) | tracks played 2+ times (30 s+), ranked by minutes |
+| TIDAL | TIDAL's data request, or a CSV from TuneMyMusic/Soundiiz (any CSV with title and artist columns) | play counts, or every saved track |
+
+The format is detected from the file. Covers come from YouTube's poster frame, Spotify's oEmbed, or
+Apple's public catalogue search for TIDAL and other CSVs (no logins). Output goes to
+`data/history.atlas.json` (gitignored); re-importing one service replaces only that service.
+`node --test scripts/history.test.mjs` covers every format.
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from

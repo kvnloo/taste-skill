@@ -1,7 +1,7 @@
 // Board canvas formats: layout plan, picks from moved refs, JSON Canvas 1.0 round trip (Ink/Inkboard, Obsidian).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { plan, picksFromScene, toJsonCanvas, fromJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile, frameId, FRAMES } from "../src/canvasfmt.js";
+import { plan, fit, picksFromScene, toJsonCanvas, fromJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile, frameId, FRAMES } from "../src/canvasfmt.js";
 
 const board = { refs: [{ id: "a", title: "Alpha", url: "https://dribbble.com/shots/1", image: "https://cdn/x.png", source: "dribbble" }, { id: "b", title: "Beta", url: "https://x.com/u/status/2" }, { id: "v", title: "Variant", source: "variant" }], notes: [{ who: "owner", text: "warmer", t: 1 }], palette: ["#ff0000"] };
 const els = (o) => o.filter((e) => !e.isDeleted);
@@ -15,6 +15,13 @@ test("plan lays out frames, refs by verdict, notes and swatches", () => {
   assert.equal(m.get("ref-v").frameId, frameId("directions"));
   assert.ok(s.some((e) => e.customData?.note === 0)); assert.ok(s.some((e) => e.customData?.swatch === "#ff0000"));
   assert.equal(new Set(s.map((e) => e.id)).size, s.length, "ids unique");
+});
+test("frames grow to hold every ref, so none is clipped", () => {
+  const many = { ...board, refs: Array.from({ length: 41 }, (_, i) => ({ id: `r${i}`, title: `R${i}` })) };
+  const s = fit(plan(many)), m = byId(s), inspo = m.get(frameId("inspo"));
+  for (const e of s.filter((e) => e.frameId === inspo.id)) assert.ok(e.y + e.height <= inspo.y + inspo.height, `${e.id} inside Inspo`);
+  assert.ok(inspo.height > 1400 && inspo.version > 1, "grew and bumped its version");
+  assert.equal(fit(s), s, "a scene that fits is returned as is");
 });
 test("plan is incremental: nothing new for a full scene, new refs avoid owner-placed shapes", () => {
   const s = plan(board);

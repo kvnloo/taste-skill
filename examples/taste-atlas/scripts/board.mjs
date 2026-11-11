@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { suggest, techById, techniqueRecord } from "../src/brief.js";
 import { localImage } from "./design.mjs";
-import { plan, picksFromScene, toJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile } from "../src/canvasfmt.js";
+import { plan, fit, picksFromScene, toJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile } from "../src/canvasfmt.js";
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
 const HOME = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
@@ -151,7 +151,7 @@ const verdictMap = (d) => { const m = new Map(); for (const p of picks(d)) if (p
 function scene(d) {
   const f = join(d, CANVAS), s = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : { elements: [], appState: {} };
   const add = plan(read(d), verdictMap(d), s.elements);
-  return { elements: [...s.elements, ...add], appState: s.appState ?? {}, added: add.length };
+  return { elements: fit([...s.elements, ...add]), appState: s.appState ?? {}, added: add.length };
 }
 /** Save the scene; refs dragged into Kept / Noped / back to Inspo become picks, so `status` and the board page agree. */
 function saveScene(d, elements, appState = {}) {

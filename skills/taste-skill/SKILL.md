@@ -27,6 +27,11 @@ figma.com and x.ai are the bar (in words: `layout-v4.md` section 1).
 
 `<skill>` is this folder. It needs Node 22+ and Chrome, Edge or Chromium (ffmpeg optional).
 
+**If `TASTE_DATA_DIR` is set, read the owner's taste before anything else** (`taste-lab/README.md`):
+`profile/TASTE.md`, then `taxonomy/atlas.json` and `taxonomy/motion.yaml` if they exist. Their
+recorded references outrank the skill's own defaults when choosing the look and the motion; name the
+references you used in the report. Never copy anything from that directory into a public repository.
+
 ## House rules
 
 These nine win over everything else in this skill.
@@ -378,4 +383,5 @@ Each line names its checks: `consistency.mjs` ids in brackets, `check.mjs` findi
 
 ## References
 
-All in `references/`; section 3 names the one each asset needs.
+All in `references/`; section 3 names the one each asset needs. The owner's private taste profile, when `TASTE_DATA_DIR` is set, is described in
+`taste-lab/README.md`.

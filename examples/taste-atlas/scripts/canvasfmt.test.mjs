@@ -1,7 +1,7 @@
 // Board canvas formats: layout plan, picks from moved refs, JSON Canvas 1.0 round trip (Ink/Inkboard, Obsidian).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { plan, picksFromScene, toJsonCanvas, fromJsonCanvas, parseImport, rehydrate, excalidrawFile, frameId, FRAMES } from "../src/canvasfmt.js";
+import { plan, picksFromScene, toJsonCanvas, fromJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile, frameId, FRAMES } from "../src/canvasfmt.js";
 
 const board = { refs: [{ id: "a", title: "Alpha", url: "https://dribbble.com/shots/1", image: "https://cdn/x.png", source: "dribbble" }, { id: "b", title: "Beta", url: "https://x.com/u/status/2" }, { id: "v", title: "Variant", source: "variant" }], notes: [{ who: "owner", text: "warmer", t: 1 }], palette: ["#ff0000"] };
 const els = (o) => o.filter((e) => !e.isDeleted);
@@ -75,4 +75,35 @@ test("rehydrate restores ref pictures and titles after a JSON Canvas round trip,
   assert.equal(m.get("ref-b-label").text, "Beta", "text refs show their title, not the URL");
   assert.equal(m.get("cap-a").type, "text", "captions stay plain text");
   assert.equal(new Set(back.map((e) => e.id)).size, back.length, "ids unique");
+});
+
+// What Inkboard (VictorLetirand/inkboard, `ink convert`) writes back, checked against its real output: fresh ids,
+// no customData or links, and each frame as an empty body card plus a small title card above it.
+const inkboardCanvas = (s) => {
+  let k = 0; const nodes = [];
+  for (const n of toJsonCanvas(s).nodes) {
+    if (n.type === "group") { nodes.push({ id: `i${k++}`, type: "text", text: "", x: n.x, y: n.y, width: n.width, height: n.height }, { id: `i${k++}`, type: "text", text: n.label, x: n.x, y: n.y - 26, width: 60, height: 40 }); continue; }
+    if (n.type === "link" && n.id.startsWith("ref-") && s.find((e) => e.id === n.id).type === "image") continue;  // pictures are skipped
+    const text = n.type === "link" ? board.refs.find((r) => `ref-${r.id}` === n.id).title : n.text;
+    nodes.push({ id: `i${k++}`, type: "text", text, x: n.x, y: n.y, width: n.id.startsWith("cap-") ? 60 : n.width, height: n.id.startsWith("cap-") ? 40 : n.height });
+  }
+  return { nodes, edges: [] };
+};
+test("reconcile maps an Inkboard-edited file back onto board ids, so a moved card is a pick", () => {
+  const s = plan(board), noped = byId(s).get(frameId("noped")), jc = inkboardCanvas(s);
+  const beta = jc.nodes.find((n) => n.text === "Beta" && n.width === 240); beta.x = noped.x + 20; beta.y = noped.y + 60;
+  const p = parseImport(jc), back = rehydrate(reconcile(p.elements, s, { format: p.format }), board), m = byId(els(back));
+  for (const f of FRAMES) assert.equal(m.get(frameId(f.key))?.type, "frame", `frame ${f.key} restored`);
+  assert.ok(!els(back).some((e) => /^i\d/.test(e.id) && !e.containerId), "no stray title or body cards");
+  assert.equal(m.get("ref-b").frameId, frameId("noped")); assert.equal(m.get("ref-b").link, board.refs[1].url, "link restored");
+  assert.equal(m.get("cap-b").type, "text"); assert.equal(m.get("cap-b").frameId, frameId("inspo"), "the same-text caption stays");
+  assert.equal(m.get("ref-a").type, "image", "a picture JSON Canvas dropped is kept");
+  assert.deepEqual(picksFromScene(back, new Map(), s), [{ ref: "b", verdict: "nope" }]);
+});
+test("reconcile keeps own-id files as they are and tombstones board shapes the owner deleted", () => {
+  const s = plan(board), x = excalidrawFile(s.filter((e) => e.id !== "note-0" && e.id !== "note-0-label" && !e.id.startsWith("note-")), {});
+  const back = reconcile(parseImport(x).elements, s);
+  assert.deepEqual(els(back).map((e) => e.id).sort(), s.filter((e) => !e.id.startsWith("note-")).map((e) => e.id).sort());
+  assert.ok(back.some((e) => e.id.startsWith("note-") && e.isDeleted), "deleted note stays as a tombstone");
+  assert.deepEqual(plan(board, new Map(), back).filter((e) => e.id.startsWith("note-")), [], "the agent does not re-add it");
 });

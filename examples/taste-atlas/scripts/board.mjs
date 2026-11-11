@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { suggest, techById, techniqueRecord } from "../src/brief.js";
 import { localImage } from "./design.mjs";
-import { plan, picksFromScene, toJsonCanvas, parseImport, rehydrate, excalidrawFile } from "../src/canvasfmt.js";
+import { plan, picksFromScene, toJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile } from "../src/canvasfmt.js";
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
 const HOME = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
@@ -186,8 +186,10 @@ async function fullExcalidraw(d) {
   });
   return excalidrawFile(s.elements.map((e) => (e.type === "image" && files[e.fileId] ? { ...e, status: "saved" } : e)), files, s.appState);
 }
-function importInto(d, raw) {
-  const p = parseImport(raw), files = p.files, elements = rehydrate(p.elements, read(d));
+async function importInto(d, raw) {
+  // Inkboard and other editors save new ids and drop frames/links: map shapes back onto the board scene first.
+  const p = parseImport(raw), files = p.files, prev = await fullExcalidraw(d);  // pictures embedded, so refs match by bytes
+  const elements = rehydrate(reconcile(p.elements, prev.elements, { files, prevFiles: prev.files, format: p.format }), read(d));
   for (const f of Object.values(files)) try { saveFile(d, f); } catch { /* skip non-image files */ }
   return { elements: elements.length, picks: saveScene(d, elements) };
 }
@@ -471,7 +473,7 @@ switch (cmd) {
   }
   case "import": {
     const d = dir(pos[0]), f = pos[1]; if (!f || !existsSync(f)) die("import needs a .excalidraw or .canvas file");
-    let r; try { r = importInto(d, readFileSync(f, "utf8")); } catch (e) { die(`import: ${e.message}`); }
+    let r; try { r = await importInto(d, readFileSync(f, "utf8")); } catch (e) { die(`import: ${e.message}`); }
     out({ ok: true, ...r }); break;
   }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;

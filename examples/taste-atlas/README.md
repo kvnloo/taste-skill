@@ -181,7 +181,9 @@ Directions, Ideas and Noped. The owner picks the engine at the top, and the choi
 **Excalidraw** edits it in the browser, and **Ink** ([Inkboard](https://github.com/VictorLetirand/inkboard))
 edits it on the desktop through `.excalidraw` or `.canvas` ([JSON Canvas](https://jsoncanvas.org)) files.
 Both are MIT and need no license key. Dragging a ref into Kept likes it, and Noped nopes it, in either
-engine. `board.mjs canvas <id> [--ink]`, `export` and `import` do the same from the CLI. Build and
+engine. Inkboard saves fresh ids and turns frames into plain cards, so an import is matched back onto
+the board by content (frame titles, picture bytes, card text, nearest same-size shape); checked against
+its `ink convert` output for both formats. `board.mjs canvas <id> [--ink]`, `export` and `import` do the same from the CLI. Build and
 check: [`canvas/README.md`](canvas/README.md).
 
 ## Agents

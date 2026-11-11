@@ -139,11 +139,69 @@ export function rehydrate(elements, board) {
   return elements.flatMap((e) => swap.get(e) ?? [e]);
 }
 
-/** Parse an imported file (.excalidraw or .canvas) into {elements, files}. */
+/** Parse an imported file (.excalidraw or .canvas) into {elements, files, format}. */
 export function parseImport(raw) {
   const j = typeof raw === "string" ? JSON.parse(raw) : raw;
-  if (j?.type === "excalidraw" && Array.isArray(j.elements)) return { elements: j.elements, files: j.files ?? {} };
-  return { elements: fromJsonCanvas(j), files: {} };
+  if (j?.type === "excalidraw" && Array.isArray(j.elements)) return { elements: j.elements, files: j.files ?? {}, format: "excalidraw" };
+  return { elements: fromJsonCanvas(j), files: {}, format: "canvas" };
+}
+
+/** Re-identify an edited file against the scene it came from. Inkboard (and other editors) save fresh ids and drop
+ *  customData, links and frames (a frame comes back as a dashed box plus a title text), so match by content:
+ *  frames by title, refs by picture bytes or title, captions, notes and swatches by text; the nearest wins.
+ *  Matched shapes take back their board id and data at the file's position. Board shapes the file no longer has
+ *  stay as deleted tombstones (so the agent doesn't re-add them), except pictures a JSON Canvas file can't carry. */
+export function reconcile(imported, prev, { files = {}, prevFiles = {}, format = "excalidraw" } = {}) {
+  const els = live(imported), byId = new Map(els.map((e) => [e.id, e])), done = new Set(), rename = new Map(), out = [];
+  const labelOf = (e) => (e.type === "text" ? e.text : (e.boundElements ?? []).map((b) => byId.get(b.id)).find((t) => t?.type === "text" && t.containerId === e.id)?.text) ?? "";
+  const norm = (s) => String(s ?? "").trim().toLowerCase();
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  // Nearest candidate, preferring ones of about the same size: a ref card and its caption share their text, and the
+  // card may have moved far (that move is the pick).
+  const near = (e, p) => Math.abs(e.width - p.width) <= p.width / 4 && Math.abs(e.height - p.height) <= p.height / 4;
+  const take = (cands, p) => { const free = cands.filter((e) => !done.has(e.id)), same = free.filter((e) => near(e, p)); const c = (same.length ? same : free).sort((a, b) => dist(a, p) - dist(b, p))[0]; if (c) done.add(c.id); return c; };
+  const prevLive = live(prev), prevById = new Map(prevLive.map((e) => [e.id, e])), kept = new Set();
+  const role = (p) => (p.type === "frame" ? "frame" : p.customData?.ref && p.id.startsWith("ref-") ? "ref" : p.customData?.caption ? "caption" : p.customData?.note !== undefined ? "note" : p.customData?.swatch ? "swatch" : null);
+  const prevLabel = (p) => (p.type === "frame" ? p.name : p.type === "text" ? p.text : (p.boundElements ?? []).map((b) => prevById.get(b.id)).find((t) => t?.type === "text")?.text);
+  const dataOf = (e, fs) => fs[e.fileId]?.dataURL;
+  for (const p of prevLive) {
+    const r = role(p); if (!r) continue;
+    let m = byId.get(p.id) && !done.has(p.id) ? byId.get(p.id) : null;  // same id: our own export came back
+    if (m) done.add(m.id);
+    else if (r === "frame") {
+      const t = take(els.filter((e) => !e.containerId && norm(labelOf(e)) === norm(p.name) && e.width < 400), p);
+      const body = t && take(els.filter((e) => ["frame", "rectangle"].includes(e.type) && e.width >= 300 && Math.abs(e.x - t.x) < 12 && e.y >= t.y - 4 && e.y - t.y < 90), p);
+      if (body) { m = body; rename.set(t.id, null); }
+      else if (t) done.delete(t.id);
+    } else if (r === "ref" && p.type === "image") {
+      const want = dataOf(p, prevFiles); m = want ? take(els.filter((e) => e.type === "image" && dataOf(e, files) === want), p) : null;
+    } else {
+      const want = norm(prevLabel(p)); if (want) m = take(els.filter((e) => !e.containerId && (r === "caption" ? e.type !== "image" : e.type !== "text" && e.type !== "image") && norm(labelOf(e)) === want), p);
+    }
+    if (m) { rename.set(m.id, p); kept.add(p.id); }
+  }
+  const idFor = (e) => { const p = rename.get(e.id); return p ? p.id : e.containerId && rename.get(e.containerId) ? `${rename.get(e.containerId).id}-label` : e.id; };
+  for (const e of els) {
+    if (rename.get(e.id) === null) continue;  // a frame title text: the frame carries its name
+    const own = e.containerId && byId.has(e.containerId) ? rename.get(e.containerId) : undefined;
+    if (own === null || own?.type === "frame" || own?.type === "text") continue;  // labels of title boxes, frame bodies, captions
+    const p = rename.get(e.id), fix = (b) => ({ ...b, id: byId.has(b.id) ? idFor(byId.get(b.id)) : b.id });
+    const n = { ...e, id: idFor(e), boundElements: e.boundElements?.map(fix) ?? null, containerId: e.containerId ? idFor(byId.get(e.containerId) ?? { id: e.containerId }) : e.containerId ?? null, frameId: null };
+    if (e.startBinding?.elementId && byId.has(e.startBinding.elementId)) n.startBinding = { ...e.startBinding, elementId: idFor(byId.get(e.startBinding.elementId)) };
+    if (e.endBinding?.elementId && byId.has(e.endBinding.elementId)) n.endBinding = { ...e.endBinding, elementId: idFor(byId.get(e.endBinding.elementId)) };
+    if (p?.type === "text") { out.push({ ...p, x: e.x, y: e.y, frameId: null }); continue; }  // a caption that came back as a card
+    if (p) Object.assign(n, { customData: p.customData, link: p.link ?? n.link ?? null }, p.type === "frame" ? { type: "frame", name: p.name, backgroundColor: "transparent", strokeStyle: "solid", boundElements: null } : {});
+    out.push(n);
+  }
+  // Frame membership from geometry (imports lose it), so Excalidraw clips and moves children with their frame.
+  const frames = out.filter((e) => e.type === "frame");
+  for (const e of out) if (e.type !== "frame") { const f = frames.find((f) => inside(e, f)); e.frameId = f ? f.id : null; }
+  for (const p of prevLive) {
+    if (kept.has(p.id) || !role(p) || p.containerId) continue;
+    if (format === "canvas" && p.type === "image") { out.push(p); continue; }  // JSON Canvas can't hold pictures: keep it
+    out.push({ ...p, isDeleted: true });
+  }
+  return out;
 }
 
 /** A full .excalidraw document (what Inkboard and excalidraw.com open). */

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Excalidraw, restoreElements, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import "./canvas.css";
+import { fit } from "../../src/canvasfmt.js";
 
 const id = location.pathname.match(/^\/s\/([a-z0-9-]{4,40})/)?.[1];
 const api = (p) => `/s/${id}${p}`;
@@ -76,7 +77,7 @@ function App() {
         const have = new Set(x.getSceneElementsIncludingDeleted().map((e) => e.id)), fresh = s.elements.filter((e) => !have.has(e.id));
         if (engine === "ink") { x.updateScene({ elements: restoreElements(s.elements, null) }); fillPictures(x, s.elements, files.current); return; }
         if (!fresh.length) return;
-        const add = restoreElements(fresh, null); x.updateScene({ elements: [...x.getSceneElementsIncludingDeleted(), ...add] }); fillPictures(x, add, files.current);
+        const add = restoreElements(fresh, null); x.updateScene({ elements: fit([...x.getSceneElementsIncludingDeleted(), ...add]) }); fillPictures(x, add, files.current);
       } catch { /* server restarting; next tick */ }
     }, 4000);
     return () => clearInterval(t);

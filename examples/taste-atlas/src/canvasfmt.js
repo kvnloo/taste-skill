@@ -63,6 +63,19 @@ export function plan(board, verdicts = new Map(), scene = []) {
 }
 
 const live = (els) => els.filter((e) => !e.isDeleted);
+/** Grow frames (never shrink) so every shape in them fits: a board with many refs fills more rows than the
+ *  default height, and Excalidraw clips whatever sticks out of its frame. Returns the same array when nothing grew. */
+export function fit(elements) {
+  const bottom = new Map();
+  for (const e of live(elements)) if (e.frameId && e.type !== "frame") bottom.set(e.frameId, Math.max(bottom.get(e.frameId) ?? -Infinity, e.y + e.height));
+  let grew = false;
+  const out = elements.map((f) => {
+    const need = f.type === "frame" && !f.isDeleted && bottom.has(f.id) ? Math.ceil(bottom.get(f.id) + CELL.pad - f.y) : 0;
+    if (need <= f.height) return f;
+    grew = true; return { ...f, height: need, version: (f.version ?? 1) + 1, versionNonce: (f.versionNonce ?? 0) + 1, updated: Date.now() };
+  });
+  return grew ? out : elements;
+}
 const inside = (e, f) => e.x >= f.x && e.y >= f.y && e.x + e.width <= f.x + f.width && e.y + e.height <= f.y + f.height;
 /** Frame key an element sits in: its frameId, else the frame that contains it (imports lose frameId). */
 function whereIs(e, frames) { const k = keyOfFrame(e.frameId); if (k) return k; const f = frames.find((f) => inside(e, f)); return f ? keyOfFrame(f.id) : null; }

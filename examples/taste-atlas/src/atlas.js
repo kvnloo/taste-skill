@@ -66,7 +66,7 @@ export function createAtlas({ svg, card, width, height }) {
     const d = p.level === 0
       ? `M0 0 L${n.x} ${n.y}`
       : `M${p.x} ${p.y} C${Math.cos(p.a) * rm} ${Math.sin(p.a) * rm} ${Math.cos(n.a) * rm} ${Math.sin(n.a) * rm} ${n.x} ${n.y}`;
-    const path = el("path", { d, "stroke-linecap": "round" }, edgeLayer);
+    const path = el("path", { d, "stroke-linecap": "round", ...(p.level === 0 && { class: "e0" }) }, edgeLayer); // e0: root spokes (hidden under the Work layer)
     parts.set("e:" + n.id, path);
   }
   // Nodes.

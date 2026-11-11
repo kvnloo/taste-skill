@@ -122,6 +122,58 @@ text are never written out. LinkedIn exports only your first-degree connections,
 the ones your own data shows: people in a group thread with a connection, and pending invitations to you.
 Output goes to `data/network.atlas.json` (gitignored). `node --test scripts/network.test.mjs` covers the importer.
 
+### Work: your projects as a repo map
+
+The **Work** layer puts your own projects in the empty disc at the centre of the atlas, as nested packed
+bubbles (the RepoMap idea from aodl-views, ported in `src/pack.js`). Zoom is depth:
+
+| Depth | Bubbles | Shows |
+|---|---|---|
+| 0 Portfolio | products | name, status ring, "checked 2h ago"; a deadline arc if the product has one |
+| 1 Product | its component areas | area = decayed recent work, colour = status, "also in <product>" |
+| 2 Component | its pages, linked posts, films, PRs | thumbnails first, PRs as a row of chips |
+| 3 Proof | lightbox | numbers, files touched per day, PRs with checks, main CI, repo heads, "You asked: …" |
+
+Click a bubble to fly in, click the focused one again for its proof, Esc steps out one level. Status uses four
+colours (on track, watch, at risk, blocked); anything past its refresh window draws grey and dashed, never as
+live. A component that belongs to two products is drawn once; the other product shows a dashed portal to it.
+The HUD scrubs "as of" (now, −1d, −3d, −7d) and the half-life, and the bubbles re-weigh in place. Any post's
+detail view has **Link to work…**: the link is saved in `data/work-links.json` (`POST /api/work-links` on the
+board server) and the post is tethered from its tile on the ring to the component, as a faint bundle when zoomed
+out. Search finds products and components; `/#work:glide/taste` deep-links one; the shelf lists its pages and
+linked posts; the Layers bar has a **Work** toggle.
+
+```sh
+node scripts/work.mjs [--dry] [--no-shots] [--no-gh]   # writes data/work.atlas.json (+ data/work-shots/)
+```
+
+`scripts/work.config.json` is the only hand-written part: products → component areas as path globs per repo
+(first match wins, in file order), page lists, and where the status-board seed and asks live. Private URLs go
+in `data/work.config.local.json` (same shape; pages merge by component id). Everything else is measured:
+`git log --since` touches per component, `gh pr list --json …,files` (one call per repo maps PRs to
+components) and `gh run list` for main CI, cached in `data/work-cache/` for 15 minutes (`WORK_GH_TTL`); a 403
+or 429 writes a back-off file and no further call is made until it expires. Pages that answer are screenshotted
+with Playwright; the rest are listed as down. A missing repo or gh makes that part `unknown`.
+
+`data/work.atlas.json` (`kind: "taste-atlas.work.v1"`) is shaped so a RepoMap-style consumer can read it:
+
+```js
+{ generated, generatedAt /* epoch s */, halfLifeHours, windowDays,
+  products: [{ id, label, name, weight, lastTouched, touches: [[epochSeconds, files], …],
+    status: { value: "on-track"|"watch"|"at-risk"|"blocked"|"unknown", why, source: "live"|"board 11-10", checked, window },
+    verdict, deadline, metrics: [[label, value, source]], repos: [{ id, ok, head, headMsg, headAt, commits }],
+    components: [ids], portals: [ids], notes, links, asks: [{ t, text }], films: [itemIds] }],
+  components: [{ id: "product/component", product, label, name, also: [productIds], repos, weight, lastTouched, touches,
+    status, prs: [{ repo, number, title, state, draft, t, url, checks: { pass, fail, pending } }],
+    pages: [{ name, url | file, shot, state: "up"|"down", code, checked }], metrics, asks, films }],
+  ci: { "<owner/repo>": { conclusion, t, url } }, repos, unmapped, errors }
+```
+
+`weight` is the decayed touch weight at `generatedAt`; `touches` are raw so a consumer can re-weigh at any
+"as of" and half-life (`weightAt` in `src/pack.js`). Status from the board seed is labelled with its source and
+only used while fresh (24 h); after that the live rule takes over. `node --test scripts/work.test.mjs` covers
+the importer; `WORK=1 node scripts/shot.mjs <dir>` checks the layer end to end.
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from
@@ -135,7 +187,9 @@ builder (`src/brief.js`) backs the card's "Copy site brief" / "Component brief" 
 canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
 `HISTORY=1 node scripts/shot.mjs <dir>` checks `/history` on desktop and phone (a card per source, calendars
 drawn, every cover loads). `NETWORK=1 node scripts/shot.mjs <dir>` checks `/network` the same way (every node
-drawn, a company card shows its way in, search finds it). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
+drawn, a company card shows its way in, search finds it). `WORK=1 node scripts/shot.mjs <dir>` checks the Work layer (every product
+on screen, a real click into glide and Taste pages, thumbnails drawn, the proof lightbox, a post linked and tethered after a
+reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;

@@ -17,6 +17,7 @@
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
 // The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
+//   The atlas links a post to a Work node with POST /api/work-links {item, node, op: add|remove} ($ATLAS_DATA/work-links.json).
 // Sessions: $TASTE_BOARD_HOME (default ~/.cache/taste-board/<id>/), pruned after 7 days idle.
 // Server: 127.0.0.1:$TASTE_BOARD_PORT (8789). $TASTE_BOARD_URL = the address to print instead (e.g. a tailnet URL).
 // Public search: Exa's keyless MCP (https://mcp.exa.ai/mcp, override $TASTE_SEARCH_MCP); pictures from the page's
@@ -152,6 +153,20 @@ function serve() {
     if (u.pathname === "/history") return file(res, join(app, "history.html"));
     if (u.pathname === "/network") return file(res, join(app, "network.html"));
     if (u.pathname === "/api/boards") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(boardList())); return; }
+    if (u.pathname === "/api/work-links" && req.method === "POST") {  // atlas: link a post to a work node, or unlink it
+      let body = ""; req.on("data", (c) => { body += c; if (body.length > 2048) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const { item, node, op = "add" } = JSON.parse(body);
+          if (typeof item !== "string" || !/^[\w:.-]{1,120}$/.test(item) || typeof node !== "string" || !/^[a-z0-9-]{1,40}(\/[a-z0-9-]{1,40})?$/.test(node) || !["add", "remove"].includes(op)) throw new Error("bad link");
+          const f = join(DATA, "work-links.json"), cur = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : { kind: "taste-atlas.work-links.v1", links: [] };
+          cur.links = cur.links.filter((l) => !(l.item === item && l.node === node));
+          if (op === "add") cur.links.push({ item, node, t: now() });
+          writeFileSync(f + ".tmp", JSON.stringify(cur, null, 1)); renameSync(f + ".tmp", f);
+          res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(cur));
+        } catch (e) { res.writeHead(400).end(e.message); }
+      }); return;
+    }
     if (u.pathname === "/atlas" || u.pathname === "/atlas/" || u.pathname === "/atlas/index.html") { res.writeHead(301, { location: "/" + u.search }).end(); return; }
     if (u.pathname.startsWith("/atlas/")) { const f = inside(app, u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }
     if (!m) { const f = inside(app, u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }

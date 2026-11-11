@@ -117,7 +117,7 @@ export async function mountBookmarks(A, { go, fly }) {
   let pickKey = null;
   const pickSet = (key) => (key.startsWith("L:") ? new Set([...groups.values()].filter((g) => !g.layerRow && g.sector === key.slice(2)).map((g) => g.key)) : new Set([key]));
   function pick(key, quiet) {
-    if (key === pickKey) return; pickKey = key; dirty++; litFor = null;
+    if (key === pickKey) return; pickKey = key; dirty++; litFor = null; if (key) custom = null;
     if (key) { for (const g of groups.values()) if (g.key === key || (key.startsWith("L:") && g.sector === key.slice(2))) hidden.delete(g.layer); saveHidden(); fly?.(boxOf(key)); }
     if (!quiet) draw();
   }
@@ -317,6 +317,7 @@ export async function mountBookmarks(A, { go, fly }) {
       <div class="lb-body"><div class="lb-line">${line.map((n, i) => `<span><b style="color:${op.color}">0${i + 1}</b> ${esc(n.name)}</span>`).join("")}</div>
       ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) || NAMED.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}${board && b.url ? `<button data-board="${esc(board.id)}" title="Add to the board: ${esc(board.title)}">+ Board: ${esc(board.title.slice(0, 28))}</button>` : ""}</div></div></div>`;
+    box.querySelector(".lb-body").insertAdjacentHTML("beforeend", A.postExtra?.(b) ?? "");
     box.classList.add("on");
     const img = box.querySelector("img.hero");
     if (img && orig) { const hi = new Image(); hi.decoding = "async"; hi.src = "./data/" + orig; hi.decode().then(() => { if (current === b) img.src = hi.src; }, (e) => console.error("full-res:", orig, e.message)); }
@@ -358,9 +359,10 @@ export async function mountBookmarks(A, { go, fly }) {
   const subjects = [...new Set(items.map((b) => b.subject).filter(Boolean))];
   let layer = new URLSearchParams(location.search).get("layer"); // a sources layer chip (?layer= from History), or null for every layer
   const lib = viewOf() === "library"; // Library = this shelf as a full-screen mosaic, at /library
-  let subject = null, open = lib || innerWidth > 700, wide = lib, last = null, shown = lib ? 180 : 60;
+  let subject = null, open = lib || innerWidth > 700, wide = lib, last = null, shown = lib ? 180 : 60, custom = null; // custom: a work node's pages + linked posts (src/work.js)
   addEventListener("taste:view", (e) => { const w = e.detail.view === "library"; if (w === wide) return; wide = w; if (w) open = true; shown = w ? 180 : 60; draw(); });
   const toggleWide = () => setView(wide ? "atlas" : "library");
+  const refit = () => A.refit?.() || go(A.view.focus); // the shelf changed the free area: re-fit what is in view (a Work node keeps its own)
   const under = (id) => {
     const n = A.graph.byId.get(id) ?? A.graph.root;
     const t = n.level === 4 ? n.parent : n;
@@ -374,14 +376,14 @@ export async function mountBookmarks(A, { go, fly }) {
   const matching = (q) => { const ws = q.toLowerCase().split(/\s+/).filter(Boolean); return ws.length ? everything.filter((b) => ws.every((w) => hay.get(b.id).includes(w))) : everything; };
   function draw() {
     const focus = A.view.focus, n = A.graph.byId.get(focus) ?? A.graph.root;
-    let list = query ? matching(query) : pickKey ? groups.get(pickKey).items : under(focus); if (subject) list = list.filter((b) => b.subject === subject); if (layer) list = list.filter((b) => b.layer === layer);
+    let list = query ? matching(query) : custom ? custom.items : pickKey ? groups.get(pickKey).items : under(focus); if (subject) list = list.filter((b) => b.subject === subject); if (layer) list = list.filter((b) => b.layer === layer);
     // Posts with media first: text-only posts were classified from text alone and their scores are not comparable.
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
-    const title = query ? `“${query}”` : pickKey ? (pickKey.startsWith("L:") ? groups.get(pickKey).name : `${LAYERS[groups.get(pickKey).layer]} · ${groups.get(pickKey).name}`) : n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
+    const title = query ? `“${query}”` : custom ? custom.title : pickKey ? (pickKey.startsWith("L:") ? groups.get(pickKey).name : `${LAYERS[groups.get(pickKey).layer]} · ${groups.get(pickKey).name}`) : n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : custom ? "YOUR WORK" : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${custom && !query ? custom.n : list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
-      <div class="grid">${list.slice(0, shown).map((b) => {
+      <div class="grid">${custom && !query ? custom.html : ""}${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? b.author : "@" + b.author;
         return `<a href="${esc(b.url)}" data-post="${b.id}" target="_blank" rel="noopener" title="${esc(b.text)}">
           ${b.thumb ? `<img loading="lazy" decoding="async" src="./data/${esc(b.thumb)}"${hires[b.id]?.full ? ` srcset="./data/${esc(b.thumb)} 480w, ./data/${esc(hires[b.id].full)} 1600w" sizes="${wide ? "20vw" : "160px"}"` : ""} alt="" />` : `<div class="txt">${esc(b.text.slice(0, 120))}</div>`}
@@ -393,16 +395,16 @@ export async function mountBookmarks(A, { go, fly }) {
   shelf.addEventListener("click", (e) => {
     if (e.target.closest(".clr")) { e.preventDefault(); setQuery(""); document.getElementById("q").value = ""; return; }
     if (e.target.closest(".wid")) { toggleWide(); return; }
-    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(() => go(A.view.focus), 270); }
+    if (e.target.closest(".tog") || (innerWidth <= 700 && e.target.closest("header"))) { if (wide) { setView("atlas"); open = false; } else open = !open; draw(); setTimeout(refit, 270); }
     const s = e.target.closest("[data-s]")?.dataset.s; if (s) { subject = s === "all" ? null : s; if (s === "all") layer = null; shown = 60; draw(); }
     const l = e.target.closest("[data-l]")?.dataset.l; if (l) { layer = layer === l ? null : l; shown = 60; draw(); }
     if (e.target.closest(".more")) { shown += wide ? 180 : 60; draw(); }
     const post = e.target.closest("[data-post]"); if (post) { e.preventDefault(); detail(byId.get(post.dataset.post)); }
   });
   addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") toggleWide(); });
-  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(() => go(A.view.focus), 270); } });
+  addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(refit, 270); } });
   (function poll(now) {
-    if (A.view.focus !== last) { last = A.view.focus; pickKey = null; litFor = null; shown = 60; draw(); }
+    if (A.view.focus !== last) { last = A.view.focus; pickKey = null; custom = null; litFor = null; shown = 60; draw(); }
     tune(now);
     paint(); requestAnimationFrame(poll);
   })(0);
@@ -412,5 +414,9 @@ export async function mountBookmarks(A, { go, fly }) {
   const findGroups = (q) => { const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
     return [...groups.values()].filter((g) => { const h = `${g.name} ${LAYERS[g.layer] ?? g.layer} ${g.layer}`.toLowerCase(); return ws.every((w) => h.includes(w)); })
       .sort((x, y) => !!y.layerRow - !!x.layerRow || y.items.length - x.items.length).slice(0, 5).map((g) => ({ key: g.key, name: g.layerRow ? g.name : `${g.name}`, sub: g.layerRow ? "layer" : LAYERS[g.layer] ?? g.layer, n: g.items.length })); };
-  return { pick, findGroups, groups, hidden, tilesShown: () => tiles.filter(visible).length, hires: () => hires, lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
+  // Hooks for the Work layer (src/work.js): its own layer toggle, a shelf list, where a post's tile sits, any post by id.
+  const addLayer = (k, name, n, col) => { LAYERS[k] = name; LCOL[k] = col; counts.set(k, n); drawBar(); };
+  const setCustom = (c) => { custom = c; if (c) { pickKey = null; if (innerWidth > 700) open = true; } shown = 60; draw(); };
+  const tileOf = (id) => tiles.find((t) => t.b.id === id && visible(t)) ?? null;
+  return { pick, findGroups, groups, hidden, addLayer, setCustom, tileOf, byId, tilesShown: () => tiles.filter(visible).length, hires: () => hires, lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

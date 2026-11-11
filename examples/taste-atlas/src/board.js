@@ -10,6 +10,7 @@ const SRC = { mine: "yours", "mine:ask": "you asked", "mine:film": "your film", 
 const root = document.documentElement;
 root.dataset.theme = getTheme();
 mountNav($(".bar .brand"));
+{ const id = location.pathname.split("/")[2]; if (id) $("#inatlas").href = `/?board=${id}`; }
 
 let board = null, filter = "all", previewRev = -1, seenRefs = new Set(), seenNotes = 0, first = true;
 

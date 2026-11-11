@@ -3,6 +3,7 @@ import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { mountWork } from "./work.js";
+import { mountBoardFilter } from "./boardfilter.js";
 import { brief, briefMarkdown } from "./brief.js";
 import { mountNav, getTheme, saveTheme, setView } from "./nav.js";
 
@@ -159,5 +160,6 @@ card.addEventListener("click", async (e) => {
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
 mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
-  .then((work) => { window.__atlas.work = work; }).catch((e) => console.error("work:", e));
+  .then((work) => { window.__atlas.work = work; return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
+  .then((bf) => { window.__atlas.boards = bf; }).catch((e) => console.error("work:", e));
 requestAnimationFrame(frame);

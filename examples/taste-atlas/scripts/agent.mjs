@@ -6,6 +6,9 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 // Hermes' terminal tool does not inherit this process's env, so the board home/URL ride in the command itself;
 // without them board.mjs falls back to ~/.cache/taste-board and a scratch server would drive the live boards.
@@ -14,6 +17,13 @@ const envs = ["TASTE_BOARD_HOME", "TASTE_BOARD_URL", "TASTE_PENCIL_URL", "TASTE_
 const CLI = [...envs, "node", fileURLToPath(new URL("./board.mjs", import.meta.url))].join(" ");
 const IDLE_MS = 30 * 60e3;
 const agents = new Map();  // board id -> Agent
+
+// Per-board override: <board dir>/agent.json {"hermes_home": "<profile dir>", "brief": "<extra role text>"}
+// picks which Hermes profile answers this board's talk bar (e.g. a liaison profile for a project board).
+const boardAgent = (id) => {
+  try { return JSON.parse(readFileSync(join(process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board"), id, "agent.json"), "utf8")); }
+  catch { return {}; }
+};
 
 export const agentEnabled = () => (process.env.TASTE_AGENT ?? "hermes") !== "off";
 
@@ -44,7 +54,9 @@ class Agent {
   constructor(id, onEvent) {
     this.id = id; this.onEvent = onEvent; this.next = 1; this.wait = new Map(); this.queue = Promise.resolve(); this.text = "";
     const [bin, ...args] = (process.env.TASTE_AGENT_CMD ?? "hermes acp --accept-hooks").split(" ");
-    this.p = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], env: process.env });
+    this.cfg = boardAgent(id);
+    const env = this.cfg.hermes_home ? { ...process.env, HERMES_HOME: this.cfg.hermes_home } : process.env;
+    this.p = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], env });
     this.p.on("error", (e) => this.fail(`agent did not start: ${e.message}`));
     this.p.on("exit", (code, sig) => this.fail(`agent exited (${sig ?? code})`));
     this.p.stderr.on("data", (c) => process.stderr.write(`[agent ${id}] ${c}`));
@@ -83,7 +95,7 @@ class Agent {
     this.touch();
     const turn = this.queue.then(async () => {
       await this.ready;
-      const prompt = this.briefed ? text : `${brief(this.id, url)}\n\nKevin: ${text}`; this.briefed = true;
+      const prompt = this.briefed ? text : `${brief(this.id, url)}${this.cfg.brief ? `\n\n${this.cfg.brief}` : ""}\n\nKevin: ${text}`; this.briefed = true;
       this.text = ""; this.onEvent({ type: "busy" });
       const r = await this.rpc("session/prompt", { sessionId: this.session, prompt: [{ type: "text", text: prompt }] });
       this.onEvent({ type: "reply", text: this.text.trim(), stop: r?.stopReason });

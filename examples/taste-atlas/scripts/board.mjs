@@ -241,7 +241,7 @@ function serve() {
     if (sub.startsWith("/variants/")) { const f = inside(join(d, "variants"), sub.slice(9)); return f ? file(res, f) : res.writeHead(403).end(); }
     if (sub.startsWith("/preview/")) { const f = inside(join(d, "preview"), sub.slice(8)); return f ? file(res, f.endsWith("/") || !extname(f) ? join(f, "index.html") : f, { "content-security-policy": "frame-ancestors 'self'" }) : res.writeHead(403).end(); }
     res.writeHead(404).end("not found");
-  }).listen(PORT, "127.0.0.1", () => process.stderr.write(`taste board on ${LOCAL}\n`));
+  }).listen(PORT, "127.0.0.1", () => { mkdirSync(HOME, { recursive: true }); writeFileSync(join(HOME, "server.pid"), String(process.pid)); process.stderr.write(`taste board on ${LOCAL}\n`); });
 }
 
 const sessions = () => (existsSync(HOME) ? readdirSync(HOME).filter((s) => existsSync(join(HOME, s, "board.json"))) : []);
@@ -379,6 +379,9 @@ switch (cmd) {
       all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, round: r.round, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null, file: localImage(r.image, { app, data: DATA, boards: HOME }) ?? (/^https?:/.test(r.image ?? "") ? r.image : null) })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
   }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;
-  case "stop": try { execFileSync("pkill", ["-f", `${basename(fileURLToPath(import.meta.url))} serve`]); out({ stopped: true }); } catch { out({ stopped: false }); } break;
+  case "stop": {  // only this $TASTE_BOARD_HOME's server; a pattern kill would also take down other boards (e.g. the systemd one)
+    const f = join(HOME, "server.pid"), pid = existsSync(f) ? +readFileSync(f, "utf8") : 0;
+    try { if (!pid) throw 0; process.kill(pid); rmSync(f, { force: true }); out({ stopped: true, pid }); } catch { out({ stopped: false }); } break;
+  }
   default: die(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 16).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
 }

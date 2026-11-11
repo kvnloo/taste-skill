@@ -174,6 +174,16 @@ with Playwright; the rest are listed as down. A missing repo or gh makes that pa
 only used while fresh (24 h); after that the live rule takes over. `node --test scripts/work.test.mjs` covers
 the importer; `WORK=1 node scripts/shot.mjs <dir>` checks the layer end to end.
 
+### Board canvas: Excalidraw or Ink
+
+`/s/<id>/canvas` (the board's "canvas ↗" link) lays a board out freely in five frames: Inspo, Kept,
+Directions, Ideas and Noped. The owner picks the engine at the top, and the choice is remembered:
+**Excalidraw** edits it in the browser, and **Ink** ([Inkboard](https://github.com/VictorLetirand/inkboard))
+edits it on the desktop through `.excalidraw` or `.canvas` ([JSON Canvas](https://jsoncanvas.org)) files.
+Both are MIT and need no license key. Dragging a ref into Kept likes it, and Noped nopes it, in either
+engine. `board.mjs canvas <id> [--ink]`, `export` and `import` do the same from the CLI. Build and
+check: [`canvas/README.md`](canvas/README.md).
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from

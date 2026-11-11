@@ -15,6 +15,11 @@
 //   board.mjs compare <id> <a> <b>|clear [--why]  two refs side by side; the owner picks one (keys 1 / 2)
 //   board.mjs image <id> <file> [--title] [--note] [--from a,b] [--same-round]   add a generated picture (a direction) in a round
 //   board.mjs status <id>                         the board plus the owner's picks (JSON)
+//   board.mjs canvas <id> [--ink]                 canvas URL + shape counts; writes <id>.excalidraw/.canvas; --ink opens Inkboard
+//   board.mjs export <id> --format excalidraw|canvas   the canvas to stdout (.excalidraw with pictures, or JSON Canvas)
+//   board.mjs import <id> <file.excalidraw|.canvas>    replace the canvas with a file edited in Inkboard/Obsidian/excalidraw.com
+//   Canvas page /s/<id>/canvas: Excalidraw in the browser, or Ink (Inkboard desktop) via those files. Build once:
+//   npm --prefix canvas ci && npm --prefix canvas run build (see canvas/README.md).
 // The page's talk bar (typed or dictated) goes to a Hermes session over ACP that drives these commands: see agent.mjs.
 //   board.mjs list | stop | serve [--port 8789]
 //   The atlas links a post to a Work node with POST /api/work-links {item, node, op: add|remove} ($ATLAS_DATA/work-links.json).
@@ -33,6 +38,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { suggest, techById, techniqueRecord } from "../src/brief.js";
 import { localImage } from "./design.mjs";
+import { plan, picksFromScene, toJsonCanvas, parseImport, rehydrate, excalidrawFile } from "../src/canvasfmt.js";
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
 const HOME = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
@@ -48,7 +54,7 @@ const PENCIL = (process.env.TASTE_PENCIL_URL ?? "").replace(/\/$/, "");
 
 const argv = process.argv.slice(2), [cmd, ...rest] = argv;
 const opt = (f) => (rest.includes(f) ? rest[rest.indexOf(f) + 1] : null), has = (f) => rest.includes(f);
-const BOOL = ["--owner", "--no-pane"];
+const BOOL = ["--owner", "--no-pane", "--ink"];
 const pos = rest.filter((a, i) => !a.startsWith("--") && !(rest[i - 1]?.startsWith("--") && !BOOL.includes(rest[i - 1])));
 const out = (v) => process.stdout.write((typeof v === "string" ? v : JSON.stringify(v, null, 2)) + "\n");
 const die = (m) => { process.stderr.write(`board: ${m}\n`); process.exit(2); };
@@ -137,9 +143,58 @@ function addRefs(d, refs) {
   b.refs.push(...fresh); write(d, b); return fresh;
 }
 
+// ---------- canvas: one Excalidraw scene per board (canvas.excalidraw) plus its pictures (canvas-files/); src/canvasfmt.js
+const CANVAS = "canvas.excalidraw", CFILES = "canvas-files";
+const MIME = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml" };
+const verdictMap = (d) => { const m = new Map(); for (const p of picks(d)) if (p.ref) m.set(p.ref, p.verdict); return m; };
+/** The saved scene plus whatever the board gained since (agent refs, notes, swatches), placed without moving anything. */
+function scene(d) {
+  const f = join(d, CANVAS), s = existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : { elements: [], appState: {} };
+  const add = plan(read(d), verdictMap(d), s.elements);
+  return { elements: [...s.elements, ...add], appState: s.appState ?? {}, added: add.length };
+}
+/** Save the scene; refs dragged into Kept / Noped / back to Inspo become picks, so `status` and the board page agree. */
+function saveScene(d, elements, appState = {}) {
+  if (!Array.isArray(elements) || elements.some((e) => typeof e?.id !== "string" || typeof e?.type !== "string")) throw new Error("elements must be an array of {id,type,...}");
+  const f = join(d, CANVAS), before = scene(d).elements;
+  writeFileSync(f + ".tmp", JSON.stringify({ elements, appState: { viewBackgroundColor: appState.viewBackgroundColor } })); renameSync(f + ".tmp", f);
+  const ps = picksFromScene(elements, verdictMap(d), before);
+  for (const p of ps) appendFileSync(join(d, "picks.jsonl"), JSON.stringify({ ref: p.ref, verdict: p.verdict, via: "canvas", t: now() }) + "\n");
+  return ps;
+}
+const canvasFiles = (d) => { const c = join(d, CFILES); return existsSync(c) ? Object.fromEntries(readdirSync(c).filter((f) => f.endsWith(".json")).map((f) => { const j = JSON.parse(readFileSync(join(c, f), "utf8")); return [j.id, j]; })) : {}; };
+function saveFile(d, f) {
+  if (!/^[\w-]{1,80}$/.test(f?.id ?? "") || !/^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,/.test(f?.dataURL ?? "")) throw new Error("bad file: needs {id, dataURL: data:image/...;base64,...}");
+  const c = join(d, CFILES), p = join(c, `${f.id}.json`); mkdirSync(c, { recursive: true });
+  if (!existsSync(p)) writeFileSync(p, JSON.stringify({ id: f.id, mimeType: f.dataURL.slice(5, f.dataURL.indexOf(";")), dataURL: f.dataURL, created: now() }));
+}
+/** A board ref's picture as bytes: local atlas/board files first, else the remote URL (only refs on this board). */
+async function refImage(d, refId) {
+  const ref = read(d).refs.find((r) => r.id === refId); if (!ref?.image) return null;
+  const loc = localImage(ref.image, { app, data: DATA, boards: HOME });
+  if (loc) return { mime: MIME[extname(loc).toLowerCase()] ?? "image/jpeg", buf: readFileSync(loc) };
+  const du = String(ref.image).match(/^data:(image\/[\w+.-]+);base64,(.*)$/s); if (du) return { mime: du[1], buf: Buffer.from(du[2], "base64") };
+  if (!/^https?:/.test(ref.image)) return null;
+  const r = await get(ref.image, {}, 20000), mime = (r.headers.get("content-type") ?? "").split(";")[0];
+  return mime.startsWith("image/") ? { mime, buf: Buffer.from(await r.arrayBuffer()) } : null;
+}
+/** The whole canvas as one .excalidraw (pictures embedded): what Inkboard and excalidraw.com open. */
+async function fullExcalidraw(d) {
+  const s = scene(d), files = canvasFiles(d);
+  await pool(s.elements.filter((e) => e.type === "image" && !e.isDeleted && e.fileId && !files[e.fileId] && e.customData?.ref), 4, async (e) => {
+    try { const im = await refImage(d, e.customData.ref); if (im) files[e.fileId] = { id: e.fileId, mimeType: im.mime, dataURL: `data:${im.mime};base64,${im.buf.toString("base64")}`, created: now() }; } catch { /* a ref whose picture is gone stays a placeholder */ }
+  });
+  return excalidrawFile(s.elements.map((e) => (e.type === "image" && files[e.fileId] ? { ...e, status: "saved" } : e)), files, s.appState);
+}
+function importInto(d, raw) {
+  const p = parseImport(raw), files = p.files, elements = rehydrate(p.elements, read(d));
+  for (const f of Object.values(files)) try { saveFile(d, f); } catch { /* skip non-image files */ }
+  return { elements: elements.length, picks: saveScene(d, elements) };
+}
+
 // ---------- server
 function serve() {
-  const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif", ".mp4": "video/mp4" };
+  const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif", ".mp4": "video/mp4", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf" };
   const file = (res, f, extra = {}) => {
     if (!existsSync(f) || !statSync(f).isFile()) { res.writeHead(404).end("not found"); return; }
     res.writeHead(200, { "content-type": types[extname(f)] ?? "application/octet-stream", "cache-control": "no-store", ...extra }).end(readFileSync(f));
@@ -173,6 +228,22 @@ function serve() {
     const d = join(HOME, m[1]), sub = m[2] ?? "/";
     if (!existsSync(join(d, "board.json"))) { res.writeHead(404, { "content-type": "text/plain" }).end(`No board ${m[1]}. Start one: board.mjs start`); return; }
     if (sub === "/") return file(res, join(app, "board.html"));
+    if (sub === "/canvas" || sub === "/canvas/") {
+      const f = join(app, "canvas/dist/index.html");
+      return existsSync(f) ? file(res, f) : res.writeHead(503, { "content-type": "text/plain" }).end(`The canvas isn't built yet. Run once:\n  npm --prefix ${join(app, "canvas")} ci && npm --prefix ${join(app, "canvas")} run build\nMeanwhile: board.mjs canvas ${m[1]} --ink opens it in Inkboard.`);
+    }
+    if (sub === "/canvas.json" && req.method !== "POST") { const s = scene(d); res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ ...s, files: u.searchParams.get("files") === "0" ? {} : canvasFiles(d) })); return; }
+    const body = (limit, fn) => { const chunks = []; let n = 0; req.on("data", (c) => { n += c.length; if (n > limit) { res.writeHead(413).end("too large"); req.destroy(); } else chunks.push(c); });
+      req.on("end", async () => { if (res.writableEnded) return; try { const r = await fn(Buffer.concat(chunks).toString("utf8")); res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(r ?? { ok: true })); } catch (e) { res.writeHead(400).end(e.message); } }); };
+    if (sub === "/canvas.json" && req.method === "POST") return body(8 << 20, (t) => { const p = JSON.parse(t); return { picks: saveScene(d, p.elements, p.appState) }; });
+    if (sub === "/canvas/file" && req.method === "POST") return body(16 << 20, (t) => { saveFile(d, JSON.parse(t)); });
+    if (sub === "/canvas/import" && req.method === "POST") return body(64 << 20, (t) => importInto(d, t));
+    if (sub === "/canvas/img") {
+      refImage(d, u.searchParams.get("ref") ?? "").then((im) => (im ? res.writeHead(200, { "content-type": im.mime, "cache-control": "max-age=86400" }).end(im.buf) : res.writeHead(404).end("no picture")), (e) => res.writeHead(502).end(e.message));
+      return;
+    }
+    if (sub === "/board.excalidraw") { fullExcalidraw(d).then((x) => res.writeHead(200, { "content-type": "application/json", "content-disposition": `attachment; filename="${m[1]}.excalidraw"` }).end(JSON.stringify(x)), (e) => res.writeHead(500).end(e.message)); return; }
+    if (sub === "/board.canvas") { res.writeHead(200, { "content-type": "application/json", "content-disposition": `attachment; filename="${m[1]}.canvas"` }).end(JSON.stringify(toJsonCanvas(scene(d).elements), null, 1)); return; }
     if (sub === "/board.json") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ ...read(d), picks: picks(d) })); return; }
     if (sub === "/events") {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" });
@@ -377,6 +448,31 @@ switch (cmd) {
     out({ id: b.id, title: b.title, goal: b.goal, url: `${BASE}/s/${b.id}/`, techniques: b.techniques, palette: b.palette, type: b.type, refs: b.refs.length,
       liked: byRef("like"), pinned: byRef("pin"), noped: byRef("nope"), focus: b.focus ?? null, compare: b.compare ?? null, design: b.design ?? null,
       all: b.refs.map((r) => ({ id: r.id, title: String(r.title).slice(0, 90), source: r.source, round: r.round, technique: r.technique ?? null, text: r.text ? String(r.text).slice(0, 120) : undefined, verdict: last.get(r.id) ?? null, file: localImage(r.image, { app, data: DATA, boards: HOME }) ?? (/^https?:/.test(r.image ?? "") ? r.image : null) })), owner_notes: p.filter((x) => x.verdict === "note").map((x) => x.text), preview: b.preview }); break;
+  }
+  case "canvas": {  // the canvas URL and counts; writes both Ink files; --ink opens the .excalidraw in Inkboard ($TASTE_INK or inkboard on PATH)
+    const d = dir(pos[0]), b = read(d), s = scene(d), x = join(d, "export"); mkdirSync(x, { recursive: true });
+    const ex = join(x, `${b.id}.excalidraw`), cv = join(x, `${b.id}.canvas`);
+    writeFileSync(ex, JSON.stringify(await fullExcalidraw(d))); writeFileSync(cv, JSON.stringify(toJsonCanvas(s.elements), null, 1));
+    const live = s.elements.filter((e) => !e.isDeleted), count = (f) => live.filter(f).length;
+    let ink = null;
+    if (has("--ink")) {
+      const bin = process.env.TASTE_INK ?? ["inkboard", "Inkboard"].find((n) => { try { execFileSync("sh", ["-c", `command -v ${n}`], { stdio: "ignore" }); return true; } catch { return false; } });
+      if (bin) { spawn(bin, [ex], { detached: true, stdio: "ignore" }).unref(); ink = { opened: ex, with: bin }; }
+      else ink = { opened: null, why: "Inkboard not found: install it (https://github.com/VictorLetirand/inkboard/releases) or set $TASTE_INK", file: ex };
+    }
+    out({ url: `${BASE}/s/${b.id}/canvas`, engines: { excalidraw: `${BASE}/s/${b.id}/canvas?engine=excalidraw`, ink: `${BASE}/s/${b.id}/canvas?engine=ink` },
+      shapes: { total: live.length, frames: count((e) => e.type === "frame"), refs: count((e) => e.customData?.ref), notes: count((e) => e.customData?.note !== undefined), swatches: count((e) => e.customData?.swatch) }, new_since_save: s.added, excalidraw: ex, canvas: cv, ink });
+    break;
+  }
+  case "export": {
+    const d = dir(pos[0]), f = opt("--format") ?? "excalidraw";
+    if (f === "excalidraw") out(JSON.stringify(await fullExcalidraw(d))); else if (f === "canvas") out(toJsonCanvas(scene(d).elements)); else die("--format is excalidraw or canvas");
+    break;
+  }
+  case "import": {
+    const d = dir(pos[0]), f = pos[1]; if (!f || !existsSync(f)) die("import needs a .excalidraw or .canvas file");
+    let r; try { r = importInto(d, readFileSync(f, "utf8")); } catch (e) { die(`import: ${e.message}`); }
+    out({ ok: true, ...r }); break;
   }
   case "list": out(sessions().map((s) => { const b = read(join(HOME, s)); return { id: s, title: b.title, refs: b.refs.length, updated: new Date(b.updated).toISOString(), url: `${BASE}/s/${s}/` }; })); break;
   case "stop": {  // only this $TASTE_BOARD_HOME's server; a pattern kill would also take down other boards (e.g. the systemd one)

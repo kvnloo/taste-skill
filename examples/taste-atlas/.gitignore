@@ -1,3 +1,6 @@
 data
 # shot.mjs screenshots can show private bookmarks
 /*.png
+
+# canvas build output (npm --prefix canvas run build)
+canvas/dist/

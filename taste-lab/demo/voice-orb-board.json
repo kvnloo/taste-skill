@@ -1,0 +1,379 @@
+{
+  "ask": "Make the voice orb feel alive",
+  "rounds": [
+    {
+      "round": 1,
+      "directions": [
+        {
+          "id": "r1-breathe",
+          "title": "Quiet Breathing",
+          "palette": [
+            "#09111E",
+            "#F4FAFF",
+            "#79E6FF",
+            "#182B3D",
+            "#B1C9D9"
+          ],
+          "motion": "breathing 0.25Hz; glow radius 8–24px; ease-in-out",
+          "type": "Space Grotesk + DM Sans",
+          "rationale": "Gentle idle breathing suggests presence without pretending to hear audio.",
+          "refs": [
+            "Linear",
+            "Stripe"
+          ],
+          "contrast": {
+            "textOnBackground": "17.98:1",
+            "accentOnBackground": "13.12:1",
+            "mutedOnBackground": "11.01:1",
+            "textOnSurface": "13.75:1",
+            "accentOnSurface": "10.04:1",
+            "mutedOnSurface": "8.42:1"
+          }
+        },
+        {
+          "id": "r1-spring",
+          "title": "Responsive Spring",
+          "palette": [
+            "#10150D",
+            "#F6FFEF",
+            "#C1FF7B",
+            "#233024",
+            "#BED0B5"
+          ],
+          "motion": "spring k=180, damping c=22; tap scale 1.06; settle under 400ms",
+          "type": "Sora + Inter",
+          "rationale": "An elastic response makes every touch feel intentional and tactile.",
+          "refs": [
+            "Material Design",
+            "Fluent 2"
+          ],
+          "contrast": {
+            "textOnBackground": "18.03:1",
+            "accentOnBackground": "15.73:1",
+            "mutedOnBackground": "11.35:1",
+            "textOnSurface": "13.47:1",
+            "accentOnSurface": "11.75:1",
+            "mutedOnSurface": "8.47:1"
+          }
+        },
+        {
+          "id": "r1-tide",
+          "title": "Spectral Tide",
+          "palette": [
+            "#130D20",
+            "#F9F4FF",
+            "#C3AAFF",
+            "#28213C",
+            "#C7B8DD"
+          ],
+          "motion": "orbital drift 0.16Hz; four soft spectral arcs; amplitude 4px",
+          "type": "Manrope + DM Sans",
+          "rationale": "Slow moving arcs express curiosity without visual noise.",
+          "refs": [
+            "Carbon",
+            "Radix UI"
+          ],
+          "contrast": {
+            "textOnBackground": "17.55:1",
+            "accentOnBackground": "9.51:1",
+            "mutedOnBackground": "10.24:1",
+            "textOnSurface": "14.14:1",
+            "accentOnSurface": "7.66:1",
+            "mutedOnSurface": "8.25:1"
+          }
+        },
+        {
+          "id": "r1-ember",
+          "title": "Warm Ember",
+          "palette": [
+            "#1A1013",
+            "#FFF5F3",
+            "#FFC29C",
+            "#35222A",
+            "#DDC0BD"
+          ],
+          "motion": "breathing 0.20Hz; inner glow 10–22px; soft decay 650ms",
+          "type": "Outfit + Inter",
+          "rationale": "Warmth makes the assistant approachable while retaining a dark stage.",
+          "refs": [
+            "Polaris",
+            "Primer"
+          ],
+          "contrast": {
+            "textOnBackground": "17.39:1",
+            "accentOnBackground": "11.93:1",
+            "mutedOnBackground": "10.95:1",
+            "textOnSurface": "13.87:1",
+            "accentOnSurface": "9.51:1",
+            "mutedOnSurface": "8.74:1"
+          }
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "directions": [
+        {
+          "id": "r2-listen",
+          "title": "Breath + Listening Halo",
+          "parent": "r1-breathe",
+          "palette": [
+            "#09121D",
+            "#F3FBFF",
+            "#77E9FF",
+            "#18303C",
+            "#B1CFDE"
+          ],
+          "motion": "breathing 0.25Hz idle; listening halo 0.35Hz; no recording claim when inactive",
+          "type": "Plus Jakarta Sans + DM Sans",
+          "rationale": "Adds a clearly gated listening state to the quieter breathing concept.",
+          "refs": [
+            "Linear",
+            "Material Design"
+          ],
+          "contrast": {
+            "textOnBackground": "17.97:1",
+            "accentOnBackground": "13.34:1",
+            "mutedOnBackground": "11.51:1",
+            "textOnSurface": "13.13:1",
+            "accentOnSurface": "9.75:1",
+            "mutedOnSurface": "8.42:1"
+          }
+        },
+        {
+          "id": "r2-spring",
+          "title": "Breath + Reactive Spring",
+          "parent": "r1-breathe",
+          "palette": [
+            "#09171A",
+            "#F1FFFC",
+            "#76F6DD",
+            "#19373A",
+            "#ADDBD6"
+          ],
+          "motion": "breathing 0.25Hz idle; speech peak spring k=180, damping c=24; max scale 1.06",
+          "type": "Space Grotesk + Inter",
+          "rationale": "Keeps calm idle presence, then lets speech energy shape a restrained spring.",
+          "refs": [
+            "Stripe",
+            "Radix UI"
+          ],
+          "contrast": {
+            "textOnBackground": "17.80:1",
+            "accentOnBackground": "13.92:1",
+            "mutedOnBackground": "12.08:1",
+            "textOnSurface": "12.40:1",
+            "accentOnSurface": "9.70:1",
+            "mutedOnSurface": "8.42:1"
+          }
+        },
+        {
+          "id": "r2-ripples",
+          "title": "Breath + Echo Ripples",
+          "parent": "r1-breathe",
+          "palette": [
+            "#0B1223",
+            "#F1F7FF",
+            "#9CCAFF",
+            "#202E4B",
+            "#B6C9E2"
+          ],
+          "motion": "breathing 0.25Hz idle; one 450ms ripple per speech onset; fade to zero",
+          "type": "Instrument Sans + Inter",
+          "rationale": "Adds one readable echo to the original breath instead of perpetual animation.",
+          "refs": [
+            "Fluent 2",
+            "Carbon"
+          ],
+          "contrast": {
+            "textOnBackground": "17.32:1",
+            "accentOnBackground": "10.94:1",
+            "mutedOnBackground": "11.06:1",
+            "textOnSurface": "12.54:1",
+            "accentOnSurface": "7.92:1",
+            "mutedOnSurface": "8.01:1"
+          }
+        },
+        {
+          "id": "r2-focus",
+          "title": "Breath + Focus Ring",
+          "parent": "r1-breathe",
+          "palette": [
+            "#0C1220",
+            "#F3F9FF",
+            "#9FE9FF",
+            "#1E2D41",
+            "#BACDDC"
+          ],
+          "motion": "breathing 0.25Hz idle; 240ms focus-ring transition; stop motion on pause",
+          "type": "Urbanist + DM Sans",
+          "rationale": "Gives the original pulse a legible focus cue for keyboard and voice transitions.",
+          "refs": [
+            "Primer",
+            "Material Design"
+          ],
+          "contrast": {
+            "textOnBackground": "17.64:1",
+            "accentOnBackground": "13.87:1",
+            "mutedOnBackground": "11.45:1",
+            "textOnSurface": "13.14:1",
+            "accentOnSurface": "10.34:1",
+            "mutedOnSurface": "8.53:1"
+          }
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "directions": [
+        {
+          "id": "r3-living",
+          "title": "Living Presence",
+          "parent": "r2-spring",
+          "palette": [
+            "#08171B",
+            "#F0FFFC",
+            "#7AFAE2",
+            "#19363B",
+            "#B7DCD6"
+          ],
+          "motion": "breathing 0.25Hz idle; speech peaks spring k=180, damping c=24; reduced-motion static halo",
+          "type": "Space Grotesk + Inter",
+          "rationale": "Polishes the reactive spring with speech-linked energy, soft idle life, and an accessible fallback.",
+          "refs": [
+            "Linear",
+            "Radix UI"
+          ],
+          "contrast": {
+            "textOnBackground": "17.77:1",
+            "accentOnBackground": "14.45:1",
+            "mutedOnBackground": "12.38:1",
+            "textOnSurface": "12.51:1",
+            "accentOnSurface": "10.17:1",
+            "mutedOnSurface": "8.71:1"
+          }
+        },
+        {
+          "id": "r3-clear",
+          "title": "Clarity First",
+          "parent": "r2-spring",
+          "palette": [
+            "#0A1520",
+            "#F1F8FF",
+            "#87E6FF",
+            "#20303E",
+            "#B9CFDF"
+          ],
+          "motion": "breathing 0.20Hz idle; speech spring k=180, damping c=28; intensity cap 3%",
+          "type": "Manrope + Inter",
+          "rationale": "Dampens the inherited spring for a calmer enterprise-grade presence.",
+          "refs": [
+            "Stripe",
+            "Carbon"
+          ],
+          "contrast": {
+            "textOnBackground": "17.19:1",
+            "accentOnBackground": "12.96:1",
+            "mutedOnBackground": "11.44:1",
+            "textOnSurface": "12.62:1",
+            "accentOnSurface": "9.52:1",
+            "mutedOnSurface": "8.40:1"
+          }
+        },
+        {
+          "id": "r3-playful",
+          "title": "Elastic Spark",
+          "parent": "r2-spring",
+          "palette": [
+            "#111020",
+            "#FAF5FF",
+            "#C5B0FF",
+            "#302746",
+            "#D3C4E5"
+          ],
+          "motion": "breathing 0.25Hz idle; speech spring k=200, damping c=20; shimmer on onset 180ms",
+          "type": "Sora + DM Sans",
+          "rationale": "Amplifies the inherited bounce for a bolder cinematic reaction.",
+          "refs": [
+            "Fluent 2",
+            "Material Design"
+          ],
+          "contrast": {
+            "textOnBackground": "17.49:1",
+            "accentOnBackground": "9.86:1",
+            "mutedOnBackground": "11.44:1",
+            "textOnSurface": "13.01:1",
+            "accentOnSurface": "7.33:1",
+            "mutedOnSurface": "8.51:1"
+          }
+        },
+        {
+          "id": "r3-still",
+          "title": "Low-Motion Presence",
+          "parent": "r2-spring",
+          "palette": [
+            "#0B1718",
+            "#F4FFF9",
+            "#B6F6CE",
+            "#22383A",
+            "#C1DBCF"
+          ],
+          "motion": "breathing 0.12Hz idle; speech spring k=150, damping c=30; reduced-motion freeze",
+          "type": "Outfit + DM Sans",
+          "rationale": "Preserves the reactive idea in a low-stimulation variant with an explicit static mode.",
+          "refs": [
+            "Polaris",
+            "Primer"
+          ],
+          "contrast": {
+            "textOnBackground": "17.84:1",
+            "accentOnBackground": "14.84:1",
+            "mutedOnBackground": "12.44:1",
+            "textOnSurface": "12.11:1",
+            "accentOnSurface": "10.07:1",
+            "mutedOnSurface": "8.44:1"
+          }
+        }
+      ]
+    }
+  ],
+  "shortlist": [
+    "r3-living",
+    "r3-clear",
+    "r3-still"
+  ],
+  "compare": {
+    "a": "r3-living",
+    "b": "r3-clear",
+    "axes": [
+      {
+        "axis": "Idle presence",
+        "a": 5,
+        "b": 4,
+        "winner": "r3-living"
+      },
+      {
+        "axis": "Speech responsiveness",
+        "a": 5,
+        "b": 4,
+        "winner": "r3-living"
+      },
+      {
+        "axis": "Visual restraint",
+        "a": 4,
+        "b": 5,
+        "winner": "r3-clear"
+      },
+      {
+        "axis": "Accessible fallback",
+        "a": 5,
+        "b": 4,
+        "winner": "r3-living"
+      }
+    ]
+  },
+  "pick": {
+    "id": "r3-living",
+    "why": "Subtle breathing and speech-synced spring motion make the orb feel present, while the reduced-motion fallback keeps it usable."
+  }
+}

@@ -227,7 +227,7 @@ export async function mountBookmarks(A, { go, fly }) {
     const crop = (im, x, y, w = im.width, h = im.height) => { const m = Math.min(w, h); ctx.drawImage(im, (w - m) / 2, (h - m) / 2, m, m, x, y, T, T); };
     for (const t of tiles) {
       if (t.x < vx0 || t.x > vx1 || t.y < vy0 || t.y > vy1 || !visible(t)) continue;
-      const on = !lit || lit.has(t.id);
+      const on = custom?.ids ? custom.ids.has(t.b.id) : !lit || lit.has(t.id); // a board filter lights its own posts
       ctx.globalAlpha = on ? 1 : 0.06;
       const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id), h = hires[t.b.id];
       if (on && t.b.thumb && (dp > 180 || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
@@ -381,7 +381,7 @@ export async function mountBookmarks(A, { go, fly }) {
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
     const title = query ? `“${query}”` : custom ? custom.title : pickKey ? (pickKey.startsWith("L:") ? groups.get(pickKey).name : `${LAYERS[groups.get(pickKey).layer]} · ${groups.get(pickKey).name}`) : n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : custom ? "YOUR WORK" : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${custom && !query ? custom.n : list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : custom ? custom.kind ?? "YOUR WORK" : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${custom && !query ? custom.n : list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${custom && !query ? custom.html : ""}${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? b.author : "@" + b.author;
@@ -416,7 +416,7 @@ export async function mountBookmarks(A, { go, fly }) {
       .sort((x, y) => !!y.layerRow - !!x.layerRow || y.items.length - x.items.length).slice(0, 5).map((g) => ({ key: g.key, name: g.layerRow ? g.name : `${g.name}`, sub: g.layerRow ? "layer" : LAYERS[g.layer] ?? g.layer, n: g.items.length })); };
   // Hooks for the Work layer (src/work.js): its own layer toggle, a shelf list, where a post's tile sits, any post by id.
   const addLayer = (k, name, n, col) => { LAYERS[k] = name; LCOL[k] = col; counts.set(k, n); drawBar(); };
-  const setCustom = (c) => { custom = c; if (c) { pickKey = null; if (innerWidth > 700) open = true; } shown = 60; draw(); };
+  const setCustom = (c) => { custom = c; dirty++; if (c) { pickKey = null; if (innerWidth > 700) open = true; } shown = 60; draw(); };
   const tileOf = (id) => tiles.find((t) => t.b.id === id && visible(t)) ?? null;
   return { pick, findGroups, groups, hidden, addLayer, setCustom, tileOf, byId, tilesShown: () => tiles.filter(visible).length, hires: () => hires, lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

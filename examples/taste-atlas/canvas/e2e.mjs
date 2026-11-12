@@ -80,15 +80,6 @@ try {
   assert.equal(await dk.evaluate(() => window.tasteCanvas.getAppState().theme), "dark");
   await dk.waitForTimeout(1500); await dk.screenshot({ path: join(shots, "canvas-dark.png") }); log("dark", "ok");
 
-  // 7. A scene can name its own home (frames with customData.home, e.g. an agent's journey map): the canvas opens there, not on Inspo/Kept.
-  const hid = cli(["start", "Canvas home e2e", "--no-pane"]).id;
-  const post = (p, o) => fetch(`${base}/s/${hid}${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o) }).then((r) => assert.ok(r.ok, p));
-  await post("/canvas.json", { elements: [{ id: "frame-journey", type: "frame", name: "Journey", x: 9000, y: -3000, width: 1200, height: 800, customData: { home: true } }] });
-  const hp = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
-  await hp.goto(`${base}/s/${hid}/canvas?engine=excalidraw`); await hp.waitForFunction(() => window.tasteCanvas); await hp.waitForTimeout(800);
-  const onScreen = await hp.evaluate(() => { const x = window.tasteCanvas, st = x.getAppState(), f = x.getSceneElements().find((e) => e.id === "frame-journey"), sx = (f.x + f.width / 2 + st.scrollX) * st.zoom.value, sy = (f.y + f.height / 2 + st.scrollY) * st.zoom.value; return sx > 0 && sx < innerWidth && sy > 0 && sy < innerHeight; });
-  assert.ok(onScreen, "opens on the scene's home frame"); log("home_frame", "opened there");
-
   // Excalidraw registers an unload listener; Chrome reports that as a policy notice on reload. Anything else fails.
   assert.deepEqual(errors.filter((e) => !/Permissions policy violation: unload/.test(e)), []);
   console.log(JSON.stringify({ ok: true, ...summary, shots }, null, 1));

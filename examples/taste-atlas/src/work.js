@@ -220,7 +220,8 @@ export async function mountWork(A, { bm, fly, start = "" }) {
 
   // Focus: fly to a node (depth 0 portfolio, 1 product, 2 component), deep-link it, and fill the shelf.
   const boxOf = (id) => { const o = L.get(id) ?? { x: 0, y: 0, r: R + 14 }, m = o.r * (C.has(id) ? 1.04 : 1.12); return [o.x - m, o.y - m, o.x + m, o.y + m]; };
-  function focusOn(id) {
+  // raw may carry a project screen (glide@lanes); project mode (src/project.js) takes over products that have a storyboard.
+  function focusOn(id, raw = id) {
     if (id && !L.has(id)) return;
     if (hidden.delete("work")) localStorage.setItem("taste:hidden", JSON.stringify([...hidden])); bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
     focus = id; dirty++; fly(boxOf(id ?? "disc"), 900, 24, true);
@@ -230,11 +231,11 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     const pages = nodes.flatMap((c) => c.pages.map((pg, i) => ({ c, pg, i })));
     bm?.setCustom({ title: id == null ? "Your work" : name(id.replace(/>linked$/, "")), items: [...new Map(posts.map((b) => [b.id, b])).values()],
       n: pages.length + posts.length, html: pages.map(({ c, pg, i }) => `<a href="#" data-wpage="${esc(c.id)}|${i}" title="${esc(pg.name)}">${pg.shot ? `<img loading="lazy" src="./data/${esc(pg.shot)}" alt="" />` : `<div class="txt">${esc(pg.name)}<br><b>down</b> · ${esc(pg.code)}</div>`}<span class="meta"><em style="background:${pg.shot ? ST["on-track"][1] : ST["at-risk"][1]}"></em>${esc(pg.name)} · ${esc(c.name)}</span></a>`).join("") });
-    drawHud();
+    drawHud(); A.onWorkFocus?.(raw);
   }
   // After the shelf opens/closes or the window resizes, keep the focused Work node framed (true = handled).
   A.refit = (ms = 600) => { if (focus === undefined) return false; fly(boxOf(focus ?? "disc"), ms, 24, true); return true; };
-  const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; bm?.setCustom(null); };
+  const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; bm?.setCustom(null); A.onWorkFocus?.(undefined); };
 
   // Proof lightbox (depth 3): text lives only here.
   const box = document.createElement("div"); box.className = "lightbox work-lb"; document.body.appendChild(box);
@@ -315,6 +316,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.target.tagName === "INPUT" || focus === undefined) return;
     e.stopImmediatePropagation();
+    if (A.projectKey?.(e)) return;
     if (box.classList.contains("on")) return close();
     if (C.has(focus)) focusOn(C.get(focus).product);
     else if (focus?.includes(">")) focusOn(focus.split(">")[0]);
@@ -338,7 +340,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   const find = (q) => { const ws = q.toLowerCase().split(/\s+/).filter(Boolean); return [...W.products.map((p) => ({ id: p.id, name: p.name, sub: `work · ${ST[p.status.value]?.[0] ?? ""}`, h: `${p.name} ${p.id} work` })),
     ...W.components.map((c) => ({ id: c.id, name: c.name, sub: `work · ${P.get(c.product).name}${c.also.length ? " · also " + c.also.join(", ") : ""}`, h: `${c.name} ${c.id} ${P.get(c.product).name} ${c.also.join(" ")}` }))]
     .filter((x) => ws.every((w) => x.h.toLowerCase().includes(w))).slice(0, 5); };
-  const fromHash = (h) => { if (!/^work(:|$)/.test(h)) return false; const id = decodeURIComponent(h.slice(5)) || null; focusOn(id && (L.has(id) ? id : null)); return true; };
+  const fromHash = (h) => { if (!/^work(:|$)/.test(h)) return false; const raw = decodeURIComponent(h.slice(5)) || null, id = raw?.split("@")[0]; focusOn(id && (L.has(id) ? id : null), raw); return true; };
   addEventListener("hashchange", () => fromHash(location.hash.slice(1)));
   bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
   (function loop(t) { paint(t); requestAnimationFrame(loop); })(performance.now());

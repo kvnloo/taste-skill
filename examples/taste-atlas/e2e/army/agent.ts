@@ -1,5 +1,5 @@
-// The model behind `e2e explore` (needs image input, tool calls and JSON-schema output): google/gemma-4-31b-it on
-// the free NVIDIA NIM endpoint, the same G0-qualified model the glide army uses (frontend/e2e/army/agent.ts).
+// The model behind `e2e explore` (needs image input, tool calls and JSON-schema output), on the free NVIDIA NIM endpoint.
+// nemotron-3.5-super-vl: NIM retired gemma-4-31b-it (404), which the glide army qualified; boat/up.py preflights it before any spend.
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 const provider = createOpenAICompatible({
@@ -17,6 +17,8 @@ export const agents = {
       'Report as issues: controls that do nothing, cannot be reached, sit off screen, are clipped or overlap; sheets that hide what they refer to; text too small to read. ' +
       'Report as warnings: confusing copy, unclear affordances, low contrast, cramped layout. ' +
       'Expected, not bugs: canvas cards may extend past the screen edge (it is a map you pan); the top-right half-circle button is the theme toggle; ' +
-      'the replay starts paused at the end of the day. Every finding needs evidence you saw.',
+      'the replay starts paused at the end of the day. Every finding needs evidence you saw. ' +
+      // nemotron adds made-up keys to no-argument tools and then blocks on the schema error (full2 traces)
+      'Tool calls: observe and screenshot take no arguments, call them with {} exactly; use only the parameters a tool declares.',
   },
 };

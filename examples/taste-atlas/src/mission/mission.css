@@ -301,6 +301,7 @@ body:has(#drawer:not([hidden])) .m-hint { display: none; }
 .m-span:has([data-span="custom"].on) .dates { display: flex; }
 .m-span input { font: 500 11px "IBM Plex Mono", monospace; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; color-scheme: light dark; }
 .m-span .info { font: 500 10.5px "IBM Plex Mono", monospace; color: var(--mute); padding: 0 8px 0 6px; white-space: nowrap; }
+.m-span .info b { font-weight: 600; color: var(--ink); }
 .hours i.day { color: var(--ink); font-weight: 600; }
 .hours i.day::before { top: -40px; height: 34px; border-left: 2px solid var(--ink); }
 
@@ -359,11 +360,16 @@ body:has(#drawer:not([hidden])) .m-hint { display: none; }
   .brand { padding: 0 12px; min-height: 44px; }
   .m-seg { flex: 1; min-width: 0; } .m-seg button { flex: 1; justify-content: center; text-align: center; min-height: 36px; padding: 6px 8px; }
   .m-seg button b { font-size: 13px; }
+  @media (max-width: 375px) { .m-seg { gap: 2px; } .m-seg button { padding: 6px 4px; } .m-seg button b { font-size: 12.5px; } } /* 360 px: "Product" spilled 10 px past the segment */
   .m-pill { min-height: 44px; } .m-pill.icon { width: 44px; }
   .m-span { order: 9; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; row-gap: 0; }
   .m-span button { flex: 1 0 auto; min-height: 36px; font-size: 13px; }
   .m-span .info { flex-basis: 100%; text-align: center; font-size: 11px; padding: 1px 0 3px; }
-  .m-span:has([data-span="custom"].on) .info { display: none; }
+  /* custom: the date row keeps a short count beside the inputs instead of dropping the summary */
+  .m-span:has([data-span="custom"].on) .info { flex-basis: auto; padding: 0 0 0 6px; }
+  .m-span:has([data-span="custom"].on) .info .rng { display: none; }
+  .m-span .dates { flex: 1 1 auto; min-width: 0; margin-left: 0; }
+  .m-span input { flex: 1 1 0; min-width: 0; min-height: 36px; font-size: 13px; } /* thumb-sized, like the buttons above */
   .m-panel { left: 8px !important; right: 8px !important; width: auto; top: auto; bottom: calc(82px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 210px); padding: 16px 16px 20px; }
   .m-panel.right { bottom: calc(82px + env(safe-area-inset-bottom)); max-height: 48dvh; } /* the tapped card keeps its neighbours visible above */
   .m-panel h2 { font-size: 24px; }

@@ -687,7 +687,7 @@ function renderInsights() {
   if (!S.lens) return;
   const R = retro(), subs = D.sessions.filter((s) => s.subagent).length;
   const cats = Object.entries(R.cats).filter(([, v]) => v >= 1).sort((x, y) => y[1] - x[1]), ctot = cats.reduce((x, [, v]) => x + v, 0) || 1, top = R.sinks[0]?.min || 1;
-  p.innerHTML = `<span class="kicker">Retro · ${esc({ today: "today", week: "last 7 days", project: "whole project", custom: "custom range" }[WIN.id])} · from the event trace</span><h2>Where the time went</h2>
+  p.innerHTML = `<button class="x" title="Close Retro (r)" aria-label="Close Retro">✕</button><span class="kicker">Retro · ${esc({ today: "today", week: "last 7 days", project: "whole project", custom: "custom range" }[WIN.id])} · from the event trace</span><h2>Where the time went</h2>
     <div class="kpis"><div><b>${D.sessions.filter((s) => !s.continues).length}</b><span>chats · +${D.sessions.filter((s) => s.continues).length} after handoffs · ${subs} sub</span></div><div><b>${dur(R.active)}</b><span>agent time · ${dur(R.wall)} with a chat open</span></div><div><b>${R.passes}</b><span>render passes · ${R.eq.toFixed(1)}× the cut</span></div><div><b>${D.prs.filter((x) => x.state === "MERGED").length + (D.commits ?? []).length}</b><span>PRs + commits</span></div></div>
     <section><h4>Agent time by activity</h4><div class="catbar">${cats.map(([k, v]) => `<i style="flex:${v};background:${COST[k][1]}" title="${COST[k][0]} ${dur(v)}"></i>`).join("")}</div>
       <div class="catkey">${cats.slice(0, 8).map(([k, v]) => `<span><i style="background:${COST[k][1]}"></i>${COST[k][0]} <b>${dur(v)}</b> ${Math.round((v / ctot) * 100)}%</span>`).join("")}</div></section>
@@ -698,8 +698,9 @@ function renderInsights() {
     ${(I.patterns ?? []).length ? `<section><h4>Patterns</h4>${I.patterns.map((x) => `<p class="pat">${esc(x)}</p>`).join("")}</section>` : ""}`;
   p.querySelectorAll("[data-sink]").forEach((b) => (b.onclick = () => { const k = R.sinks[+b.dataset.sink]; $$(".sink.on").forEach((x) => x.classList.remove("on")); b.classList.add("on"); if (phone()) { p.classList.add("peek"); p.scrollTop = b.offsetTop - 12; } highlight(k.sessions); }));
   // phone: a picked sink folds the sheet to a peek so its chats show above it; tapping the peek unfolds it
-  p._peek ||= (p.addEventListener("click", (e) => { if (p.classList.contains("peek")) { p.classList.remove("peek"); e.stopPropagation(); } }, { capture: true }), true);
+  p._peek ||= (p.addEventListener("click", (e) => { if (p.classList.contains("peek") && !e.target.closest(".x")) { p.classList.remove("peek"); e.stopPropagation(); } }, { capture: true }), true);
   p.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => { select(b.dataset.go); focusNode(b.dataset.go, 0.7); }));
+  p.querySelector(".x").onclick = () => $("#lens").click(); // a sheet needs its own visible way out, not only the Retro pill (army finding)
   p.querySelectorAll("[data-rec]").forEach((b) => (b.onclick = () => {
     const r = I.recurring[+b.dataset.rec], ids = [...(r.sessions ?? []), ...(r.scenes ?? []), ...D.sessions.filter((s) => r.prs?.some((x) => s.prs.includes(x))).map((s) => s.id)];
     highlight(ids);
@@ -816,7 +817,9 @@ function wireFilm() {
 // ---------- controls
 function applySpanUi() {
   $$(".m-span button").forEach((b) => b.classList.toggle("on", b.dataset.span === WIN.id));
-  const n = D.sessions.length; $("#spanInfo").textContent = `${n} chats · ${hhmm(WIN.a)} → ${hhmm(WIN.b)}`;
+  // name the window too: a window holding the same chats as the last one still reads as applied (army finding at 360 px)
+  const n = D.sessions.length, nm = { today: "today", week: "last 7 days", project: "whole project", custom: "custom" }[WIN.id];
+  $("#spanInfo").innerHTML = `<span class="rng">${nm} · </span><b>${n} chats</b><span class="rng"> · ${hhmm(WIN.a)} → ${hhmm(WIN.b)}</span>`;
   const iso = (m) => { const d = dayOf(m); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   for (const [id, v] of [["#from", S.from ?? iso(WIN.a)], ["#to", S.to ?? iso(WIN.b)]]) { const el = $(id); el.value = v; el.min = iso(M.projectStart); el.max = iso(M.now); }
 }

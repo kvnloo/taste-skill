@@ -84,7 +84,11 @@ if (process.env.MISSION) {
       const sc = e.closest(".m-span, .m-panel"), box = sc ? sc.getBoundingClientRect() : { left: 0, right: vw, top: 0, bottom: vh };
       if (!sc && (r.left < -1 || r.right > vw + 1 || r.top < -1 || r.bottom > vh + 1)) out.push(`off screen: ${name}`);
       if (sc && (box.left < -1 || box.right > vw + 1)) out.push(`scroller off screen: ${sc.className}`);
-      if (sc && sc.matches(".m-span") && r.right > box.right + 1) out.push(`clipped in its row: ${name}`);
+      // a control must sit inside every drawn box around it (segment, row, sheet): content spilling past a border reads as broken
+      for (let a = e.parentElement; a; a = a.parentElement) { const cs = getComputedStyle(a);
+        if (parseFloat(cs.borderLeftWidth) > 0 || cs.backgroundColor !== "rgba(0, 0, 0, 0)") { const ab = a.getBoundingClientRect();
+          if (r.left < ab.left - 1 || r.right > ab.right + 1) { out.push(`clipped in its ${a.className.split(" ")[0] || a.tagName.toLowerCase()}: ${name} (${Math.round(Math.max(ab.left - r.left, r.right - ab.right))}px out)`); break; } }
+        if (ui.includes(a)) break; }
       const min = e.matches(".m-pill, #play, #live, .x") ? 44 : 36; if (!e.closest(".m-panel .body, .m-panel p") && (r.height < min - 0.5 || r.width < Math.min(min, 36) - 0.5)) out.push(`tap target ${Math.round(r.width)}x${Math.round(r.height)} < ${min}: ${name}`);
     }
     for (const u of ui) for (const e of u.querySelectorAll("*")) { if (!e.childNodes.length || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || !vis(e)) continue;
@@ -126,7 +130,12 @@ if (process.env.MISSION) {
     await tap('[data-mode="bs"]'); await q.waitForTimeout(400); await settle(); if ((await q.evaluate(() => document.documentElement.dataset.mode)) !== "bs") bad.push(`${tag}: tapping Brainstorm did not switch mode`); await check("bs"); await shot("bs");
     await tap('[data-mode="pm"]'); await q.waitForTimeout(600);
     await tap('[data-span="week"]'); await q.waitForTimeout(400); await settle(); if (!(await q.evaluate(() => document.querySelector('[data-span="week"]').classList.contains("on")))) bad.push(`${tag}: tapping Week did nothing`); await check("week"); await shot("week");
-    await tap('[data-span="today"]'); await q.waitForTimeout(1200);
+    // every window tap must visibly answer under the buttons, and Custom keeps a count beside its two date inputs, all on screen
+    const info = () => q.evaluate(() => { const e = document.getElementById("spanInfo"), r = e.getBoundingClientRect(); return { txt: e.innerText.trim(), shown: r.width > 0 && r.left >= -1 && r.right <= innerWidth + 1 }; });
+    const iw = await info(); await tap('[data-span="custom"]'); await q.waitForTimeout(800); const ic = await info();
+    const dates = await q.evaluate(() => ["from", "to"].every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.width >= 90 && r.left >= -1 && r.right <= innerWidth + 1 && r.height >= 36; }));
+    if (!ic.shown || !/\d+ chats/.test(ic.txt)) bad.push(`${tag}: Custom drops the chat count ("${ic.txt}")`); if (!dates) bad.push(`${tag}: Custom's date inputs are clipped or too small to tap`);
+    await tap('[data-span="today"]'); await q.waitForTimeout(1200); const it = await info(); if (it.txt === iw.txt) bad.push(`${tag}: the summary reads the same for Week and Today ("${it.txt}")`);
     await tap("#lens"); await q.waitForTimeout(700); if (await q.evaluate(() => document.getElementById("insights").hidden)) bad.push(`${tag}: tapping Retro opened nothing`);
     await check("retro"); await shot("retro");
     const sink = q.locator("#insights .sink").first(); await sink.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {}); await sink.tap({ timeout: 3000 }).catch(() => bad.push(`${tag}: cannot tap a time sink`)); await q.waitForTimeout(900);
@@ -136,7 +145,9 @@ if (process.env.MISSION) {
     await shot("sink");
     await tap("#insights"); await q.waitForTimeout(400); if (await q.evaluate(() => document.getElementById("insights").classList.contains("peek"))) bad.push(`${tag}: the folded retro sheet does not reopen on tap`);
     if (!(await q.evaluate(() => { const s = document.getElementById("insights"); return s.scrollHeight <= s.clientHeight || getComputedStyle(s).overflowY !== "visible"; }))) bad.push(`${tag}: retro sheet cannot scroll`);
-    await tap("#lens"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: Retro does not close by touch`);
+    // the sheet closes from inside itself (its own close button), and the Retro pill toggles it back
+    await tap("#insights .x"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: the retro sheet's close button does not close it`);
+    await tap("#lens"); await q.waitForTimeout(500); await tap("#lens"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: Retro does not close by touch`);
     // the lowest tappable chat card: the worst case, since the sheet rises over it
     const hit = await q.evaluate(() => { let best = null; for (const e of document.querySelectorAll("#nodes .n-session")) { const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 30); if (x > 10 && x < innerWidth - 10 && y > 120 && y < innerHeight - 100 && document.elementFromPoint(x, y)?.closest(".n") === e && (!best || y > best[1])) best = [x, y]; } return best; });
     if (!hit) bad.push(`${tag}: no chat card is tappable on the first screen`); else {

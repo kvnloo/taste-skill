@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taste · Mission</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./src/nav.css" />
+<link rel="stylesheet" href="./src/mission/mission.css" />
+</head>
+<body>
+<main id="stage" aria-label="Mission canvas">
+  <div id="world"><svg id="wires" aria-hidden="true"></svg><div id="nodes"></div></div>
+</main>
+
+<header class="m-chrome">
+  <a class="brand" href="/"><span class="dot"></span><span class="bn">Taste</span></a>
+  <div class="m-seg" role="tablist" aria-label="Canvas mode">
+    <button data-mode="bs" role="tab" title="Brainstorm view (1)"><b>Brainstorm</b><i>themes · ideas · lanes</i></button>
+    <button data-mode="pm" role="tab" title="Product view (2)"><b>Product</b><i>goal · roadmap · cut</i></button>
+  </div>
+  <button id="lens" class="m-pill" title="Insights lens (i)"><span class="glyph">◎</span> Insights</button>
+  <button id="follow" class="m-pill" title="Camera follows the newest event (g)"><span class="glyph">⌖</span> Follow</button>
+  <div class="m-spacer"></div>
+  <span id="srcbadge" class="m-src"></span>
+  <button id="theme" class="m-pill icon" title="Theme (t)">◐</button>
+</header>
+
+<aside id="insights" class="m-panel left" hidden></aside>
+<aside id="drawer" class="m-panel right" hidden></aside>
+
+<section id="ticker" class="m-ticker" aria-live="polite"></section>
+
+<footer class="m-replay">
+  <button id="play" class="m-play" title="Play / pause (space)">▶</button>
+  <div class="m-clock"><b id="clock">--:--</b><span id="clockSub">CST</span></div>
+  <div id="scrub" class="m-scrub"><canvas id="trace"></canvas><div id="ticks"></div><div id="head"></div></div>
+  <div class="m-speed" role="group" aria-label="Replay speed"><button data-speed="5">5m/s</button><button data-speed="15">15m/s</button><button data-speed="45">45m/s</button></div>
+  <button id="live" class="m-live" title="Jump to now and keep following new events (l)"><span></span>LIVE</button>
+</footer>
+<canvas id="mini" class="m-mini" width="220" height="140" title="Minimap: click to fly"></canvas>
+<div id="hint" class="m-hint">drag to pan · scroll to zoom · 1 brainstorm · 2 product · i insights · space replay · h home · f fit all</div>
+
+<script type="module" src="./src/mission/mission.js"></script>
+</body>
+</html>

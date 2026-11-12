@@ -186,6 +186,26 @@ the board by content (frame titles, picture bytes, card text, nearest same-size 
 its `ink convert` output for both formats. `board.mjs canvas <id> [--ink]`, `export` and `import` do the same from the CLI. Build and
 check: [`canvas/README.md`](canvas/README.md).
 
+## Mission
+
+`/mission` is one pannable canvas for a push that runs across many chats at once, in two arrangements of the same
+nodes (`1` / `2` morphs between them):
+
+- **Brainstorm**: the ask in the middle, the film cut as a ring of scenes around it, and each workstream as a cluster
+  of its chats and ideas.
+- **Product**: goal and acceptance, the roadmap as a time axis, the storyboard strip, the cut's version rail, and one
+  swimlane per workstream with each chat placed at the time it ran.
+
+Each chat card shows its ask (declare), its done clauses (contract), tool-call progress, PRs (proof) and the scenes it
+touched. Click a card for the full intent contract, steering and receipts; hover a scene to play its slice of the film.
+The replay bar scrubs the day: chats spawn, owner steering lands, scenes flash in the colour of the lane that touched
+them, PRs merge. **LIVE** (`l`) pins the clock to now and re-reads the snapshot every 15 s. **Insights** (`i`) shows
+duplicate chats, recurring failures, scene churn, context rot (handoffs) and patterns.
+
+Data: `data/mission.json` (a local snapshot built from your own sessions, never committed) or `mission.example.json`, a
+synthetic public sample from `python3 scripts/mission-example.py mission.example.json`. `?sample=1` forces the sample;
+`?t=15:10` opens at a time, `?play=1` replays, `#<id>` opens a card.
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from
@@ -204,6 +224,8 @@ on screen, a real click into glide and Taste pages, thumbnails drawn, the proof 
 reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
+`MISSION=1 node scripts/shot.mjs <dir>` checks `/mission` on the local snapshot and the public sample (no two nodes
+overlap in either mode, replay reaches the ticker, LIVE pins to now, an Insights failure highlights its chats).
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
 it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
 

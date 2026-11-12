@@ -27,6 +27,38 @@ if (process.env.HISTORY) {
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// MISSION=1: check /mission on the local snapshot and the public sample: in both modes no two visible nodes overlap,
+// replay fires events into the ticker, LIVE pins the clock to now, an Insights failure highlights its nodes, no errors.
+if (process.env.MISSION) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
+  for (const q of ["", "&sample=1"]) for (const mode of ["pm", "bs"]) {
+    const name = `mission-${mode}${q ? "-sample" : ""}`;
+    await p.goto(`${base}/mission?mode=${mode}&theme=dark${q}`); await p.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 15000 }); await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const bs = document.documentElement.dataset.mode === "bs", ns = [...window.__mission.nodes.values()].filter((n) => n.cur.o > 0.5 && n.kind !== "axis");
+      const box = (n) => { const h = n.el.offsetHeight; return [n.cur.x, n.cur.y - (bs && n.kind === "stream" ? h : 0), n.cur.w, h]; }, hits = [];
+      for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+        const [ax, ay, aw, ah] = box(ns[i]), [bx, by, bw, bh] = box(ns[j]);
+        if (Math.min(ax + aw, bx + bw) - Math.max(ax, bx) > 4 && Math.min(ay + ah, by + bh) - Math.max(ay, by) > 4) hits.push(`${ns[i].id} x ${ns[j].id}`);
+      }
+      return { nodes: ns.length, hits, src: document.getElementById("srcbadge").textContent };
+    });
+    console.log(name, JSON.stringify({ ...r, hits: r.hits.slice(0, 5) }));
+    if (r.hits.length) bad.push(`${name}: ${r.hits.length} overlapping nodes, e.g. ${r.hits[0]}`);
+    if (q && !r.src.startsWith("public sample")) bad.push(`${name}: ?sample did not load the public sample`);
+    await p.screenshot({ path: `${out}/${name}.png` });
+  }
+  await p.goto(`${base}/mission?mode=pm&theme=dark&t=14:00`); await p.waitForTimeout(1000);
+  await p.click('[data-speed="45"]'); await p.click("#play"); await p.waitForTimeout(2000);
+  const tk = await p.evaluate(() => document.querySelectorAll("#ticker .tk").length); if (!tk) bad.push("replay: no events reached the ticker");
+  await p.keyboard.press("l"); await p.waitForTimeout(400);
+  if (!(await p.evaluate(() => document.getElementById("live").classList.contains("on")))) bad.push("LIVE did not pin the clock to now");
+  await p.keyboard.press("i"); await p.waitForTimeout(400); await p.click("#insights .rec"); await p.waitForTimeout(900);
+  const hl = await p.evaluate(() => document.querySelectorAll(".n.hl").length); if (!hl) bad.push("insights: a recurring failure highlighted nothing");
+  await p.screenshot({ path: `${out}/mission-insights.png` }); console.log("replay ticker", tk, "highlighted", hl);
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // NETWORK=1: check /network (desktop + phone): the graph draws every imported node, a company click opens its
 // warmest way in, search finds a company, and the page logs no errors.
 if (process.env.NETWORK) {

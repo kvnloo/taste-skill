@@ -47,11 +47,11 @@ if (process.env.SKILLS) {
   await q.waitForFunction(() => window.__atlas?.lens?.current?.() === "skillshub", null, { timeout: 60000 }).catch(async (e) => { console.error("FAIL lens did not open", q.url(), errs, await q.evaluate(() => Object.keys(window.__atlas ?? {}))); throw e; }); await q.waitForTimeout(2500);
   const s = await q.evaluate(() => ({ stat: document.getElementById("stat").innerText, legend: document.getElementById("legend").innerText.split("\n").filter(Boolean),
     kind: document.querySelector(".shelf header small")?.innerText, secs: [...document.querySelectorAll(".ln h4")].map((h) => h.firstChild.textContent.trim()),
-    layers: [...document.querySelectorAll(".layers [data-layer]")].map((x) => x.innerText.replace(/\n/g, " ")), tiles: window.__atlas.bm.tilesShown(), intro: document.querySelector("#card .eyebrow")?.innerText,
-    // Domain labels sit round the hub; with ~400 leaves the small domains used to pile up there.
-    clash: (() => { const L = [...document.querySelectorAll("text.l1")].filter((t) => getComputedStyle(t).display !== "none").map((t) => [t.textContent, t.getBoundingClientRect()]), h = [];
-      for (const [i, [a, r]] of L.entries()) for (const [b, c] of L.slice(i + 1)) if (r.left < c.right && c.left < r.right && r.top < c.bottom && c.top < r.bottom) h.push(a + "×" + b); return h; })() }));
+    layers: [...document.querySelectorAll(".layers [data-layer]")].map((x) => x.innerText.replace(/\n/g, " ")), tiles: window.__atlas.bm.tilesShown(), intro: document.querySelector("#card .eyebrow")?.innerText }));
   await q.screenshot({ path: `${out}/skills-project.png` });
+  // Domain labels sit round the hub; with ~400 leaves the small domains used to pile up there (and under the intro card).
+  s.clash = await q.evaluate(() => (() => { const L = [...document.querySelectorAll("text.l1")].filter((t) => getComputedStyle(t).display !== "none").map((t) => [t.textContent, t.getBoundingClientRect()]).concat([["intro card", document.getElementById("card").getBoundingClientRect()]]), h = [];
+      for (const [i, [a, r]] of L.entries()) for (const [b, c] of L.slice(i + 1)) if (r.left < c.right && c.left < r.right && r.top < c.bottom && c.top < r.bottom) h.push(a + "×" + b); return h; })());
   await q.evaluate(() => window.__atlas.go("j:design-taste")); await q.waitForTimeout(1500);
   const job = await q.evaluate(() => document.getElementById("card").innerText.replace(/\n+/g, " | ").slice(0, 400));
   await q.screenshot({ path: `${out}/skills-job.png` });

@@ -1,18 +1,20 @@
-// One app, five views: Atlas (/), Library (/library), History (/history), Network (/network), Boards (/boards, /s/<id>/).
+// One app, seven views: Atlas (/), Library (/library), History (/history), Network (/network), Boards (/boards, /s/<id>/),
+// Mission (/mission), plus Import (/onboard): bring your own bookmarks and history in.
 // Shared top nav and one theme key, so moving between views feels like one tool, not three sites.
 // Atlas and Library are the same page: switching between them is a URL change plus a "taste:view" event, no reload.
 const KEY = "taste-theme";
-const VIEWS = [["atlas", "/", "Atlas"], ["library", "/library", "Library"], ["history", "/history", "History"], ["network", "/network", "Network"], ["boards", "/boards", "Boards"]];
+const VIEWS = [["atlas", "/", "Atlas"], ["library", "/library", "Library"], ["history", "/history", "History"], ["network", "/network", "Network"], ["boards", "/boards", "Boards"], ["mission", "/mission", "Mission"], ["onboard", "/onboard", "+ Import"]];
 
-export const viewOf = (p = location.pathname) => (p.startsWith("/library") ? "library" : p.startsWith("/history") ? "history" : p.startsWith("/network") ? "network" : p.startsWith("/boards") || p.startsWith("/s/") ? "boards" : "atlas");
+export const viewOf = (p = location.pathname) => (p.startsWith("/onboard") ? "onboard" : p.startsWith("/library") ? "library" : p.startsWith("/history") ? "history" : p.startsWith("/network") ? "network" : p.startsWith("/mission") ? "mission" : p.startsWith("/boards") || p.startsWith("/s/") ? "boards" : "atlas");
 export const getTheme = () => new URLSearchParams(location.search).get("theme") ?? localStorage.getItem(KEY) ?? localStorage.getItem("atlas-theme") ?? localStorage.getItem("board-theme") ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 export const saveTheme = (t) => localStorage.setItem(KEY, t);
 
 // Switch between the two same-page views (atlas, library); returns false when the target needs a page load.
 export function setView(view, { push = true } = {}) {
   const here = viewOf();
-  if ([here, view].some((v) => v === "boards" || v === "history" || v === "network")) return false; // separate pages
+  if ([here, view].some((v) => v === "boards" || v === "history" || v === "network" || v === "mission" || v === "onboard")) return false; // separate pages
   if (push && view !== here) history.pushState(null, "", (view === "library" ? "/library" : "/") + location.hash);
+  document.title = `Taste · ${view === "library" ? "Library" : "Atlas"}`; // same page, two views: the title says which (army finding)
   dispatchEvent(new CustomEvent("taste:view", { detail: { view } }));
   return true;
 }
@@ -22,7 +24,9 @@ export function mountNav(after) {
   nav.className = "views"; nav.setAttribute("aria-label", "Views");
   nav.innerHTML = VIEWS.map(([k, href, label]) => `<a href="${href}" data-view="${k}">${label}${k === "boards" ? `<i class="n" hidden></i>` : ""}</a>`).join("");
   after.after(nav);
-  const mark = (v) => nav.querySelectorAll("a").forEach((a) => a.classList.toggle("on", a.dataset.view === v));
+  if (viewOf() === "library") document.title = "Taste · Library"; // direct load of /library, same rule as setView
+  // On a phone the switcher scrolls sideways; keep the current view in sight.
+  const mark = (v) => nav.querySelectorAll("a").forEach((a) => { a.classList.toggle("on", a.dataset.view === v); if (a.dataset.view === v && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = a.offsetLeft + a.offsetWidth - nav.clientWidth; });
   mark(viewOf());
   nav.addEventListener("click", (e) => {
     const a = e.target.closest("a[data-view]"); if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;

@@ -31,13 +31,14 @@
 // reuse-checked: scripts/atlas.mjs -- taxonomy CLI (reused via src/brief.js); sources.mjs -- builds atlas data offline.
 import { createServer } from "node:http";
 import { spawn, execFile, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync, cpSync, renameSync, watch, appendFileSync, openSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync, cpSync, renameSync, watch, appendFileSync, openSync, copyFileSync, createWriteStream } from "node:fs";
 import { dirname, join, extname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { suggest, techById, techniqueRecord } from "../src/brief.js";
 import { localImage } from "./design.mjs";
+import { status as onboardStatus } from "./onboard.mjs";
 import { plan, fit, picksFromScene, toJsonCanvas, parseImport, rehydrate, reconcile, excalidrawFile } from "../src/canvasfmt.js";
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
@@ -120,7 +121,7 @@ async function exa(query, n) {
 }
 
 function mine(query, n, layers = null) {
-  const files = ["bookmarks.atlas.json", "sources.atlas.json", "history.atlas.json"].map((f) => join(DATA, f)).filter(existsSync);
+  const files = ["bookmarks.atlas.json", "sources.atlas.json", "history.atlas.json", "links.atlas.json"].map((f) => join(DATA, f)).filter(existsSync);
   if (!files.length) throw new Error(`no bookmarks.atlas.json, sources.atlas.json or history.atlas.json in ${DATA} (set $ATLAS_DATA)`);
   const rows = files.flatMap((f) => JSON.parse(readFileSync(f, "utf8")).items).filter((b) => !layers || layers.includes(b.layer));
   const words = (query.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2);
@@ -194,6 +195,50 @@ async function importInto(d, raw) {
   return { elements: elements.length, picks: saveScene(d, elements) };
 }
 
+// ---------- onboarding (/onboard): uploads land in $ATLAS_DATA/inbox/<batch>/, then scripts/onboard.mjs imports them.
+// Imports run one at a time (they rewrite the same data files); the page polls GET /api/onboard for status and jobs.
+const jobs = []; let jobQueue = Promise.resolve();
+function onboardJob(label, args) {
+  const j = { id: randomBytes(4).toString("hex"), label, state: "queued", t: now(), log: "" };
+  jobs.unshift(j); jobs.splice(20);
+  jobQueue = jobQueue.then(() => new Promise((done) => {
+    j.state = "running"; let out = "";
+    const c = spawn(process.execPath, [join(here, "onboard.mjs"), ...args], { env: { ...process.env, ATLAS_DATA: DATA }, stdio: ["ignore", "pipe", "pipe"] });
+    c.stdout.on("data", (d) => { out += d; });
+    c.stderr.on("data", (d) => { j.log = (j.log + d).slice(-4000); });
+    c.on("error", (e) => { j.state = "failed"; j.log += e.message; j.ended = now(); done(); });
+    c.on("close", (code) => { j.state = code ? "failed" : "done"; j.ended = now(); try { j.result = JSON.parse(out); } catch { j.log += out.slice(-2000); } done(); });
+  }));
+  return j;
+}
+function onboardApi(req, res, u) {
+  const json = (v, code = 200) => res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(v));
+  const batch = u.searchParams.get("batch") ?? "";
+  if (u.pathname === "/api/onboard" && req.method === "GET") return json({ ...onboardStatus(DATA), jobs });
+  if (batch && !/^[a-z0-9]{6,16}$/.test(batch)) return json({ error: "bad batch" }, 400);
+  if (u.pathname === "/api/onboard/upload" && req.method === "POST") { // one file of a drop; ?batch=&name=<relative path>
+    const rel = (u.searchParams.get("name") ?? "").split("/").map((p) => p.replace(/[^\w.() -]/g, "_")).filter((p) => p && p !== "." && p !== "..").slice(-6).join("/");
+    if (!batch || !rel) return json({ error: "need batch and name" }, 400);
+    const f = join(DATA, "inbox", batch, rel); mkdirSync(dirname(f), { recursive: true });
+    let n = 0; const ws = createWriteStream(f);
+    req.on("data", (c) => { n += c.length; if (n > 8 * 2 ** 30) { req.destroy(); ws.destroy(); json({ error: "over 8 GB" }, 413); } });
+    req.pipe(ws); ws.on("finish", () => json({ ok: true, bytes: n })); ws.on("error", (e) => json({ error: e.message }, 500)); return;
+  }
+  if (u.pathname === "/api/onboard/run" && req.method === "POST") {
+    let body = ""; req.on("data", (c) => { body += c; if (body.length > 1024) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const { cmd, user } = JSON.parse(body || "{}");
+        if (cmd === "import" && existsSync(join(DATA, "inbox", batch))) return json(onboardJob("Import dropped files", ["add", join(DATA, "inbox", batch)]));
+        if (cmd === "github" && /^[A-Za-z0-9-]{1,39}$/.test(user ?? "")) return json(onboardJob(`GitHub @${user}`, ["github", user]));
+        if (cmd === "x") return json(onboardJob("Sync X bookmarks", ["x"]));
+        json({ error: "unknown command" }, 400);
+      } catch (e) { json({ error: e.message }, 400); }
+    }); return;
+  }
+  json({ error: "not found" }, 404);
+}
+
 // ---------- server
 function serve() {
   const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif", ".mp4": "video/mp4", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf" };
@@ -209,6 +254,9 @@ function serve() {
     if (u.pathname === "/boards") return file(res, join(app, "boards.html"));
     if (u.pathname === "/history") return file(res, join(app, "history.html"));
     if (u.pathname === "/network") return file(res, join(app, "network.html"));
+    if (u.pathname === "/onboard") return file(res, join(app, "onboard.html"));
+    if (u.pathname.startsWith("/api/onboard")) return onboardApi(req, res, u);
+    if (u.pathname === "/mission") return file(res, join(app, "mission.html"));
     if (u.pathname === "/api/boards") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(boardList())); return; }
     if (u.pathname === "/api/work-links" && req.method === "POST") {  // atlas: link a post to a work node, or unlink it
       let body = ""; req.on("data", (c) => { body += c; if (body.length > 2048) req.destroy(); });
@@ -226,6 +274,8 @@ function serve() {
     }
     if (u.pathname === "/atlas" || u.pathname === "/atlas/" || u.pathname === "/atlas/index.html") { res.writeHead(301, { location: "/" + u.search }).end(); return; }
     if (u.pathname.startsWith("/atlas/")) { const f = inside(app, u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }
+    // Optional data layers a fresh install has not imported yet answer null (the app treats null as absent), not 404.
+    if (/^\/data\/[a-z]+\.atlas\.json$/.test(u.pathname) && !existsSync(join(app, u.pathname))) { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end("null"); return; }
     if (!m) { const f = inside(app, u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }
     const d = join(HOME, m[1]), sub = m[2] ?? "/";
     if (!existsSync(join(d, "board.json"))) { res.writeHead(404, { "content-type": "text/plain" }).end(`No board ${m[1]}. Start one: board.mjs start`); return; }

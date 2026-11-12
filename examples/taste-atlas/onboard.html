@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="referrer" content="no-referrer" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taste · Import</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/board.css" />
+<link rel="stylesheet" href="/src/nav.css" />
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/"><span class="dot"></span>Taste</a>
+  <h1 class="idx">Bring your taste in</h1>
+  <button id="theme" title="Toggle theme (t)">◐</button>
+</header>
+<main id="onboard" class="onboard">
+  <section class="ob-head">
+    <p class="ob-lede">Taste works from what you already keep: saved posts, bookmarks, what you watch and play, and who you know. Drop your exports here. Each source becomes a layer on the Atlas canvas.</p>
+    <div class="ob-progress"><span><b id="done">0</b> of <span id="total">8</span> sources in</span><i><s id="bar"></s></i></div>
+  </section>
+  <label id="drop" class="ob-drop" tabindex="0">
+    <input id="file" type="file" multiple hidden />
+    <b>Drop exports here</b>
+    <span>Takeout, Spotify and LinkedIn zips as they arrive, a bookmarks <code>.html</code>, a folder, or CSV, JSON or TXT files. Click to choose.</span>
+    <small>Files stay on this machine. Message text, emails and phone numbers are never written out.</small>
+  </label>
+  <section id="jobs" class="ob-jobs" hidden></section>
+  <section id="sources" class="ob-grid"></section>
+</main>
+<script type="module" src="/src/onboard.js"></script>
+</body>
+</html>

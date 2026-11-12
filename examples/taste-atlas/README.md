@@ -47,6 +47,26 @@ With a private `data/` folder (bookmarks classified by `products/taste` scripts,
 atlas also draws every saved post around the ring, shows "N of your posts" on the card, a shelf with
 subject filters (`b`), a full-screen mosaic (`m`) and a post detail view.
 
+### Bring your own data: Import (`/onboard`)
+
+A fresh install shows only the taxonomy; a banner points to **+ Import** (`/onboard`). That page lists every
+source with how to get its export, and has one drop zone: drop a Google Takeout, Spotify or LinkedIn zip, a
+browser bookmarks `.html` (Chrome, Firefox, Safari, Edge, Arc, Raindrop, Pocket), a folder, or a CSV/JSON/TXT,
+and each file is detected and handed to its importer. GitHub (through your `gh` login) and X bookmarks
+(read-only, through twitter-cli's browser login) are one button each. Each source turns on as a layer on the
+Atlas. The CLI is the same code path:
+
+```sh
+node scripts/onboard.mjs status                  # every source: imported or not, count, date, how to get it
+node scripts/onboard.mjs add ~/Downloads/takeout.zip bookmarks.html Spotify/   # detect and import
+node scripts/onboard.mjs github <user>           # stars + contribution calendar
+node scripts/onboard.mjs x                       # sync X bookmarks (merged; classified posts keep their technique)
+```
+
+Zips are opened in place and only the files an importer reads are extracted (from Takeout, just
+`watch-history.html`). Everything lands in `$ATLAS_DATA` (default `data/`, gitignored); uploads from the page
+go to `$ATLAS_DATA/inbox/`. Nothing leaves the machine except cover-art lookups.
+
 ### Sources: what you asked for, what you made, what you build
 
 `scripts/sources.mjs` adds a second private layer, `data/sources.atlas.json`, with these shelf chips:
@@ -186,6 +206,36 @@ the board by content (frame titles, picture bytes, card text, nearest same-size 
 its `ink convert` output for both formats. `board.mjs canvas <id> [--ink]`, `export` and `import` do the same from the CLI. Build and
 check: [`canvas/README.md`](canvas/README.md).
 
+## Mission
+
+`/mission` is one pannable canvas for a push that runs across many chats at once, in two arrangements of the same
+nodes (`1` / `2` morphs between them):
+
+- **Brainstorm**: the ask in the middle, the film cut as a ring of scenes around it, and each workstream as a cluster
+  of its chats and ideas.
+- **Product**: goal and acceptance, the roadmap as a time axis, the storyboard strip, the cut's version rail, and one
+  swimlane per workstream with each chat placed at the time it ran.
+
+Each chat card shows its ask (declare), its done clauses (contract), tool-call progress, PRs (proof) and the scenes it
+touched. Click a card for the full intent contract, steering and receipts; hover a scene to play its slice of the film.
+The replay bar scrubs the day: chats spawn, owner steering lands, scenes flash in the colour of the lane that touched
+them, PRs merge. **LIVE** (`l`) pins the clock to now and re-reads the snapshot every 15 s.
+
+**Windows**: Today / Week / Project / Custom (`?span=today|week|project|custom&from=YYYY-MM-DD&to=…`) cut one
+snapshot (minutes since `mission.epoch`) to a range. The time axis is weighted by activity, so quiet nights fold away;
+multi-day windows open on the whole range with a tally per day.
+
+**Retro** (`r`) answers "where did the time go" for the window: agent time by activity (model turns, shell, polling,
+tests, vision checks, renders, CI), and time sinks ranked by minutes, each with its cause and a fix. Click a sink to
+highlight its chats. Sinks: chats waiting on you, context rot (agent minutes from a handoff to the next edit), proof
+loops (frame probes, captures, vision checks), polling and CI waits, side quests, render passes with no new feedback
+(jobs read from the film's render logs; a pass is one chat's back-to-back chunks), renders that died, duplicate chats,
+and jobs re-dispatched by automation. Recurring failures, scene churn and patterns follow.
+
+Data: `data/mission.json` (a local snapshot built from your own sessions, never committed) or `mission.example.json`, a
+synthetic public sample from `python3 scripts/mission-example.py mission.example.json`. `?sample=1` forces the sample;
+`?t=15:10` opens at a time, `?play=1` replays, `#<id>` opens a card.
+
 ## Agents
 
 `scripts/atlas.mjs` turns the atlas into briefs an agent can build a site or UI component from
@@ -201,9 +251,30 @@ canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
 drawn, every cover loads). `NETWORK=1 node scripts/shot.mjs <dir>` checks `/network` the same way (every node
 drawn, a company card shows its way in, search finds it). `WORK=1 node scripts/shot.mjs <dir>` checks the Work layer (every product
 on screen, a real click into glide and Taste pages, thumbnails drawn, the proof lightbox, a post linked and tethered after a
-reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
+reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `ONBOARD=1 FIXTURES=<dir> node scripts/shot.mjs <dir>` runs the import journey on desktop and phone: point
+the server at an empty `ATLAS_DATA`, and it uploads every file in `FIXTURES` through the real file input,
+waits for the import, and checks that the source cards and Atlas layers turn on.
+`node --test scripts/*.test.mjs` covers detection and the importers without network. `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
+`MISSION=1 node scripts/shot.mjs <dir>` checks `/mission` on the local snapshot and the public sample (no two nodes
+overlap in either mode, replay reaches the ticker, LIVE pins to now, an Insights failure highlights its chats), then
+walks it on 390×844 and 360×800 touch phones. At every state it fails on sideways scroll, controls off screen, taps
+under 36 px (44 for lone buttons), chrome text under 11 px, overlapping fixed surfaces, a sheet hiding the replay bar,
+fewer than 3 legible chat titles in view, or a drawer covering the card that opened it. It also fails on a control spilling
+out of its drawn box (segment, row, sheet), a sheet with no close of its own, a window tap that leaves the summary unchanged,
+Custom dropping the count or shrinking its date inputs, and a tap whose own handler runs over 500 ms twice (INP "poor";
+one slow tap on a loaded host is re-tapped, not trusted). States are judged once the canvas is at rest. It also checks pinch, pan and
+scrub. On phones the chrome takes two rows and Retro and the chat drawer become bottom sheets. Picking a sink folds
+the sheet so its chats stay visible.
+
+`e2e/army` is the tester army: vision-model `e2e explore` lanes (`goals.tsv`) at the same phone sizes and desktop. Each
+lane runs in its own Boat sandbox: `cd e2e/army && with-keys.sh python3 boat/up.py`. The `canary-390` lane runs the
+pre-fix build (`e53431c`) and must report its off-screen controls, so a clean report on the real build means
+something. Every lane first runs the deterministic gate (`tests/smoke.e2e.ts`; the canary must fail it), the first lane
+also runs the phone suite above on the sandbox's own CPU, and a lane whose explorer was cut short or lost its model counts
+as a coverage gap, never a pass. The explorer is `nvidia/nemotron-3.5-super-vl-120b-a12b` on NIM (`E2E_MODEL` overrides);
+`up.py` makes one call to it before paying for any sandbox. Findings land in `runs/boat/<ts>/findings.json`.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
 it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
 

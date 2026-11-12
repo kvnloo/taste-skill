@@ -160,8 +160,14 @@ card.addEventListener("click", async (e) => {
   b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
-mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
+mountBookmarks(A, { go, fly }).then((bm) => { if (!bm) firstRun(); if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
   .then((work) => { window.__atlas.work = work; return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
   .then((bf) => { window.__atlas.boards = bf; return mountLens(A, { bm: window.__atlas.bm, fly }); })
   .then((lens) => { window.__atlas.lens = lens; }).catch((e) => console.error("work:", e));
 requestAnimationFrame(frame);
+
+// First run: no personal data yet, so the atlas is only the taxonomy. Point at the import page.
+function firstRun() {
+  const a = document.createElement("a"); a.className = "first-run"; a.href = "/onboard";
+  a.innerHTML = "<b>Make it yours.</b> Bring in your bookmarks, watch history and network →"; document.body.appendChild(a);
+}

@@ -136,8 +136,8 @@ body.film .card { top: auto; bottom: 48px; left: 48px; width: 360px; transform-o
 @media (max-width: 700px) { .shelf .wid { order: 1; width: 36px; height: 36px; } .shelf.open.wide { left: 0; top: 58px; height: auto; border-radius: 16px 16px 0 0; } .shelf.wide .grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }
 
 /* Phone header: dot + view switcher + search + theme must fit 360px. */
-/* Five views fill the phone's top row, so search takes a row of its own (it was squeezed to 0 px) and the card moves under it. */
-@media (max-width: 700px) { .chrome { flex-wrap: wrap; row-gap: 8px; } .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 calc(100% - 52px); order: 5; } .card, body:not(.film) .card { top: 100px; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } #hits { width: min(280px, calc(100vw - 24px)); } }
+/* Six views overfill the phone's top row: the switcher scrolls sideways (nav.css) instead of wrapping, and search takes a row of its own (it was squeezed to 0 px) and the card moves under it. */
+@media (max-width: 700px) { .chrome { flex-wrap: wrap; row-gap: 8px; } .chrome .brand .bn { display: none; } .search { min-width: 0; flex: 1 1 calc(100% - 52px); order: 5; } .card, body:not(.film) .card { top: 100px; } .search input { width: 100%; box-sizing: border-box; } #theme { flex: none; } .chrome .views { flex: 1 1 0; } #hits { width: min(280px, calc(100vw - 24px)); } }
 .bm-video-dock { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
 .bm-video-dock video { position: absolute; left: 0; top: 0; object-fit: cover; visibility: hidden; will-change: transform; background: #000; }
 /* Work layer (src/work.js): a canvas in the centre disc, its HUD, the proof lightbox and post links. */
@@ -255,3 +255,7 @@ body.lens .node.on { opacity: 1; }
 body.lens .shelf .chips { display: none; }
 body.lens .shelf.open:not(.wide) { width: min(560px, 44vw); }
 .ln-list small { font-size: 10.5px; }
+/* First run (src/main.js): no personal data yet. */
+.first-run { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 30; padding: 10px 16px; border-radius: 99px; background: var(--ink); color: var(--bg); font: 13px Inter, system-ui, sans-serif; text-decoration: none; box-shadow: 0 6px 24px rgba(0,0,0,.18); white-space: nowrap; }
+.first-run b { font-weight: 600; }
+@media (max-width: 700px) { .first-run { white-space: normal; width: calc(100% - 32px); text-align: center; } }

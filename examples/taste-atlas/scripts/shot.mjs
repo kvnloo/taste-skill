@@ -6,7 +6,12 @@ const out = process.argv[2] ?? ".";
 // CHROME=/path picks the browser; Google Chrome has the H.264 codec X's mp4s need, Playwright's Chromium does not.
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
-const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// a failed load is reported by URL (the console line has none); data/*.json is optional: the public sample has no snapshot
+const errs = [], OPTIONAL = /\/data\/[\w-]+\.json$/, http = (pg, tag = "") => pg.on("response", (r) => r.status() >= 400 && !OPTIONAL.test(new URL(r.url()).pathname) && errs.push(`${tag}${r.status()} ${r.url()}`));
+const noisy = (m) => m.type() !== "error" || /^Failed to load resource/.test(m.text());
+p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => noisy(m) || errs.push(m.text())); http(p);
+// Every page names the URL behind each bare "Failed to load resource" console error (logged, so a FAIL says what broke).
+const np = b.newPage.bind(b); b.newPage = async (...a) => { const q = await np(...a); q.on("response", (r) => r.status() >= 400 && console.log("http", r.status(), r.url())); return q; };
 // LENS=1: the overview hides posts the taxonomy never placed; #project:<id> lights only that project's posts (plus a
 // few greyed neighbours) and the shelf lists the project's resources in sections, not just its journey.
 if (process.env.LENS) {
@@ -28,6 +33,42 @@ if (process.env.LENS) {
   if (errs.length) bad.push(...errs);
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }
+// ONBOARD=1: the import page on a fresh data dir (run the server with an empty $ATLAS_DATA): 8 source cards, upload
+// fixture exports through the real file input (FIXTURES=<dir> of files), the import job finishes, the cards turn on,
+// and the Atlas shows each imported layer in the Layers bar. Desktop + phone screenshots.
+if (process.env.ONBOARD) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], { readdirSync } = await import("node:fs");
+  const files = readdirSync(process.env.FIXTURES).map((f) => `${process.env.FIXTURES}/${f}`);
+  for (const [name, vp] of [["onboard-desk", { width: 1440, height: 900 }], ["onboard-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && !/status of 404/.test(m.text()) && errs.push(m.text()));
+    q.on("response", (r) => r.status() === 404 && !/\/data\//.test(r.url()) && errs.push(`404 ${r.url()}`)); // absent optional data files 404 by design
+    await q.goto(`${base}/onboard?theme=dark`); await q.waitForSelector(".ob-card");
+    const before = await q.evaluate(() => ({ cards: document.querySelectorAll(".ob-card").length, done: window.__onboard.state.done }));
+    if (name === "onboard-desk") {
+      await q.screenshot({ path: `${out}/${name}-empty.png`, fullPage: true });
+      const n0 = await q.evaluate(() => window.__onboard.state.jobs.length);
+      await q.setInputFiles("#file", files);
+      await q.waitForFunction((n) => { const j = window.__onboard.state?.jobs; return j.length > n && ["done", "failed"].includes(j[0].state); }, n0, { timeout: 60000 });
+    }
+    const head = await q.evaluate(() => ({ sw: document.documentElement.scrollWidth, ...Object.fromEntries([".views", ".bar h1", "#theme"].map((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [s, [Math.round(r.left), Math.round(r.right), Math.round(r.height)]]; })) }));
+    console.log(name, "header", JSON.stringify(head));
+    if (head.sw > vp.width || head["#theme"][1] > vp.width) bad.push(`${name}: header overflows (${JSON.stringify(head)})`);
+    const after = await q.evaluate(() => ({ done: window.__onboard.state.done, on: [...document.querySelectorAll(".ob-card.in")].map((c) => c.dataset.source), job: window.__onboard.state.jobs[0]?.state, drop: document.querySelector("#drop").getBoundingClientRect().width }));
+    console.log(name, JSON.stringify({ before, after }));
+    if (before.cards !== 8) bad.push(`${name}: ${before.cards} cards`);
+    if (name === "onboard-desk" && (after.job !== "done" || after.done <= before.done)) bad.push(`${name}: import ${after.job}, ${before.done} -> ${after.done} sources`);
+    if (after.drop < Math.min(vp.width, 1180) * 0.8) bad.push(`${name}: drop zone ${after.drop}px wide`);
+    await q.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+    const want = after.on;
+    await q.goto(`${base}/?theme=dark`); await q.evaluate(() => localStorage.setItem("taste:loose", "1")); await q.reload(); await q.waitForFunction(() => window.__atlas?.bm, null, { timeout: 30000 }).catch(() => bad.push(`${name}: atlas never mounted the imported layers`));
+    const layers = await q.evaluate(() => [...document.querySelectorAll(".layers [data-layer]")].map((x) => x.dataset.layer));
+    const map = { x: "saved", web: "web" };
+    for (const s of want) if (map[s] && !layers.includes(map[s])) bad.push(`${name}: layer ${map[s]} missing from the Layers bar (${layers})`);
+    await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/${name}-atlas.png` });
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // HISTORY=1: check /history (desktop + phone): one card per imported source, calendars drawn, covers load, no errors.
 if (process.env.HISTORY) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
@@ -44,6 +85,152 @@ if (process.env.HISTORY) {
     if (r.cards.length !== r.want.length) bad.push(`${name}: ${r.cards.length} cards for ${r.want.length} sources`);
     for (const c of r.cards) { if (!c.w) bad.push(`${name}: ${c.src} calendar empty`); if (!c.imgs) bad.push(`${name}: ${c.src} no covers`); if (c.broken) bad.push(`${name}: ${c.src} ${c.broken} broken covers`); }
     await q.screenshot({ path: `${out}/${name}.png`, fullPage: name.endsWith("desk") });
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
+// MISSION=1: check /mission on the local snapshot and the public sample: in both modes no two visible nodes overlap,
+// replay fires events into the ticker, LIVE pins the clock to now, an Insights failure highlights its nodes, no errors.
+// Retro: every time window (today/week/project) lays out without overlaps, wider windows hold more chats, the ranked
+// time sinks render, and clicking the top sink highlights its chats.
+if (process.env.MISSION) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], chats = {};
+  for (const q of ["", "&sample=1", "&span=week", "&span=project"]) for (const mode of ["pm", "bs"]) {
+    const name = `mission-${mode}${q ? `-${q === "&sample=1" ? "sample" : q.split("=")[1]}` : ""}`;
+    await p.goto(`${base}/mission?mode=${mode}&theme=dark${q}`); await p.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 15000 }); await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const bs = document.documentElement.dataset.mode === "bs", ns = [...window.__mission.nodes.values()].filter((n) => n.cur.o > 0.5 && n.kind !== "axis");
+      const box = (n) => { const h = n.el.offsetHeight; return [n.cur.x, n.cur.y - (bs && n.kind === "stream" ? h : 0), n.cur.w, h]; }, hits = [];
+      for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+        const [ax, ay, aw, ah] = box(ns[i]), [bx, by, bw, bh] = box(ns[j]);
+        if (Math.min(ax + aw, bx + bw) - Math.max(ax, bx) > 4 && Math.min(ay + ah, by + bh) - Math.max(ay, by) > 4) hits.push(`${ns[i].id} x ${ns[j].id}`);
+      }
+      return { nodes: ns.length, chats: ns.filter((n) => n.kind === "session").length, hits, src: document.getElementById("srcbadge").textContent };
+    });
+    console.log(name, JSON.stringify({ ...r, hits: r.hits.slice(0, 5) }));
+    if (r.hits.length) bad.push(`${name}: ${r.hits.length} overlapping nodes, e.g. ${r.hits[0]}`);
+    if (q === "&sample=1" && !r.src.startsWith("public sample")) bad.push(`${name}: ?sample did not load the public sample`);
+    chats[`${mode}${q}`] = r.chats;
+    if (q.includes("span=")) { const days = await p.evaluate(() => [...document.querySelectorAll(".hours i.day:not(.tight)")].map((e) => e.getBoundingClientRect()).filter((b) => b.width && b.right > 0 && b.left < innerWidth));
+      if (mode === "pm" && r.chats > chats.pm && days.length < 2) bad.push(`${name}: a multi-day window shows ${days.length} day labels`);
+      if (days.some((b, i) => i && b.left < days[i - 1].right)) bad.push(`${name}: day labels overlap`); }
+    await p.screenshot({ path: `${out}/${name}.png` });
+  }
+  if (!(chats["pm&span=project"] >= chats["pm&span=week"] && chats["pm&span=week"] >= chats.pm)) bad.push(`windows: chats today/week/project ${chats.pm}/${chats["pm&span=week"]}/${chats["pm&span=project"]} should not shrink`);
+  await p.goto(`${base}/mission?mode=pm&theme=dark&lens=1`); await p.waitForFunction(() => document.querySelectorAll("#insights .sink").length > 0, null, { timeout: 15000 });
+  const sinks = await p.evaluate(() => [...document.querySelectorAll("#insights .sink")].map((b) => b.querySelector("b").textContent + " " + b.querySelector(".what").firstChild.textContent));
+  await p.click("#insights .sink"); await p.waitForTimeout(1000);
+  const shl = await p.evaluate(() => document.querySelectorAll(".n.hl").length); if (!shl) bad.push("retro: the top time sink highlighted nothing");
+  await p.screenshot({ path: `${out}/mission-retro.png` }); console.log("retro sinks", JSON.stringify(sinks.slice(0, 4)), "highlighted", shl);
+  await p.goto(`${base}/mission?mode=pm&theme=dark&t=14:00`); await p.waitForTimeout(1000);
+  await p.click('[data-speed="45"]'); await p.click("#play"); await p.waitForTimeout(2000);
+  const tk = await p.evaluate(() => document.querySelectorAll("#ticker .tk").length); if (!tk) bad.push("replay: no events reached the ticker");
+  await p.keyboard.press("l"); await p.waitForTimeout(400);
+  if (!(await p.evaluate(() => document.getElementById("live").classList.contains("on")))) bad.push("LIVE did not pin the clock to now");
+  await p.keyboard.press("i"); await p.waitForTimeout(400); await p.click("#insights .rec"); await p.waitForTimeout(900);
+  const hl = await p.evaluate(() => document.querySelectorAll(".n.hl").length); if (!hl) bad.push("insights: a recurring failure highlighted nothing");
+  await p.screenshot({ path: `${out}/mission-insights.png` }); console.log("replay ticker", tk, "highlighted", hl);
+  // Phones (touch, DPR 3): every state passes ux(), and each control works by touch, not only by key or mouse.
+  // ux(): no sideways scroll; every visible control on screen (or inside an on-screen scroller), >= 36px to tap
+  // (44 for standalone buttons); chrome text >= 11px; fixed surfaces never overlap; an open sheet ends above the
+  // replay bar; and the camera shows at least 3 cards.
+  const ux = (pg, tag) => pg.evaluate((tag) => {
+    const vw = innerWidth, vh = innerHeight, out = [], vis = (e) => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" ? r : null; };
+    if (document.documentElement.scrollWidth > vw + 1) out.push(`page scrolls sideways (${document.documentElement.scrollWidth}px)`);
+    const ui = [...document.querySelectorAll(".m-chrome, .m-panel:not([hidden]), .m-replay")];
+    for (const e of ui.flatMap((u) => [...u.querySelectorAll("button, a, input, [role=tab]")])) {
+      const r = vis(e); if (!r || e.closest("[hidden]")) continue; const name = (e.id ? "#" + e.id : "") + (e.textContent.trim().slice(0, 18) || e.title || e.className);
+      const sc = e.closest(".m-span, .m-panel"), box = sc ? sc.getBoundingClientRect() : { left: 0, right: vw, top: 0, bottom: vh };
+      if (!sc && (r.left < -1 || r.right > vw + 1 || r.top < -1 || r.bottom > vh + 1)) out.push(`off screen: ${name}`);
+      if (sc && (box.left < -1 || box.right > vw + 1)) out.push(`scroller off screen: ${sc.className}`);
+      // a control must sit inside every drawn box around it (segment, row, sheet): content spilling past a border reads as broken
+      for (let a = e.parentElement; a; a = a.parentElement) { const cs = getComputedStyle(a);
+        if (parseFloat(cs.borderLeftWidth) > 0 || cs.backgroundColor !== "rgba(0, 0, 0, 0)") { const ab = a.getBoundingClientRect();
+          if (r.left < ab.left - 1 || r.right > ab.right + 1) { out.push(`clipped in its ${a.className.split(" ")[0] || a.tagName.toLowerCase()}: ${name} (${Math.round(Math.max(ab.left - r.left, r.right - ab.right))}px out)`); break; } }
+        if (ui.includes(a)) break; }
+      const min = e.matches(".m-pill, #play, #live, .x") ? 44 : 36; if (!e.closest(".m-panel .body, .m-panel p") && (r.height < min - 0.5 || r.width < Math.min(min, 36) - 0.5)) out.push(`tap target ${Math.round(r.width)}x${Math.round(r.height)} < ${min}: ${name}`);
+    }
+    for (const u of ui) for (const e of u.querySelectorAll("*")) { if (!e.childNodes.length || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || !vis(e)) continue;
+      const fs = parseFloat(getComputedStyle(e).fontSize); if (fs < 11) { out.push(`text ${fs}px: "${e.textContent.trim().slice(0, 24)}"`); break; } }
+    const fx = [...document.querySelectorAll(".m-chrome, .m-panel:not([hidden]), .m-replay, .m-ticker")].map((e) => [e, e === document.querySelector(".m-chrome") ? [...e.children].map(vis).filter(Boolean).reduce((a, r) => ({ top: Math.min(a.top, r.top), bottom: Math.max(a.bottom, r.bottom), left: 0, right: vw }), { top: 1e9, bottom: -1e9 }) : vis(e)]).filter(([, r]) => r && r.bottom > r.top);
+    for (let i = 0; i < fx.length; i++) for (let j = i + 1; j < fx.length; j++) { const [a, ra] = fx[i], [b, rb] = fx[j];
+      if (Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top) > 1 && Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left) > 1) out.push(`overlap: ${a.className.split(" ")[0]} x ${b.className.split(" ")[0]}`); }
+    const cards = [...document.querySelectorAll("#nodes .n")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && r.width > 20; }).length;
+    const sheet = document.querySelector(".m-panel:not([hidden])"); // with a sheet up, the drawer check (tapped card uncovered) applies instead
+    if (cards < (sheet ? 1 : 3)) out.push(`camera shows ${cards} cards`);
+    // legible: on a single-day view at least 3 on-screen chat titles render >= 9px tall on the glass
+    if (!document.querySelector('[data-span="today"].on') || document.querySelector(".m-panel:not([hidden])")) return out.map((m) => `${tag}: ${m}`);
+    const k = window.__mission.S.cam.k, legible = [...document.querySelectorAll("#nodes .n-session h3")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && parseFloat(getComputedStyle(e).fontSize) * k >= 9; }).length;
+    if (document.documentElement.dataset.mode === "bs") { const g = document.querySelector("#nodes .n-goal"), r = g?.getBoundingClientRect(), h1 = g?.querySelector("h1");
+      if (!r || r.left < -1 || r.right > vw + 1) out.push("the goal (brainstorm sun) is cropped"); else if (parseFloat(getComputedStyle(h1).fontSize) * k < 16) out.push(`goal title renders ${(parseFloat(getComputedStyle(h1).fontSize) * k).toFixed(1)}px`); }
+    else if (legible < 3) out.push(`only ${legible} chat titles are legible (zoom ${k.toFixed(2)})`);
+    return out.map((m) => `${tag}: ${m}`);
+  }, tag);
+  for (const [w, h] of [[390, 844], [360, 800]]) {
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }); const q = await ctx.newPage(), tag = `phone${w}`;
+    q.on("pageerror", (e) => errs.push(`${tag}: ${e}`)); q.on("console", (m) => noisy(m) || errs.push(`${tag}: ${m.text()}`)); http(q, `${tag}: `);
+    // reachability and responsiveness are separate verdicts: a tap fails when the control is off screen, covered or moving;
+    // a tap that is dispatched but slow to finish is the page being busy, judged below by its own Event Timing (INP)
+    const tap = (sel) => q.tap(sel, { timeout: 15000 }).then(() => true, (e) => { const why = e.message.split("\n").filter((l) => l.trim()).slice(-1)[0].trim();
+      bad.push(`${tag}: ${/outside of the viewport/.test(e.message) ? `cannot tap ${sel}: off screen` : /performing tap action/.test(why) ? `tapping ${sel} froze the page > 15 s` : `cannot tap ${sel}: ${why}`}`); return false; });
+    const check = async (t) => bad.push(...(await ux(q, `${tag} ${t}`)));
+    const shot = async (t) => { const c = await ctx.newCDPSession(q); const x = await c.send("Page.captureScreenshot", { format: "png" }); (await import("node:fs")).writeFileSync(`${out}/mission-${tag}-${t}.png`, Buffer.from(x.data, "base64")); await c.detach(); };
+    await q.addInitScript(() => { window.__inp = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.interactionId) window.__inp.push({ n: e.name, t: e.target?.closest?.("[data-span],[data-mode],[id],.n")?.dataset?.span ?? e.target?.id ?? "", run: Math.round(e.processingEnd - e.processingStart), d: e.duration }); }).observe({ type: "event", durationThreshold: 16, buffered: true }); });
+    await q.goto(`${base}/mission?mode=pm`); await q.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 30000 }); await q.waitForTimeout(1500);
+    await check("load"); await shot("pm");
+    // judge a state once every card has arrived at its layout target and the camera is still, not after a fixed delay
+    // (a mode switch is a 1.1 s card tween plus a camera flight; slow software-GL frames make any fixed wait flaky)
+    const settle = async () => { let last = "";
+      for (let i = 0; i < 50; i++) { const s = await q.evaluate(() => { const m = window.__mission;
+          const arrived = [...m.nodes.values()].every((n) => { const p = n.pos[m.S.mode]; return !p || (Math.abs(n.cur.x - p.x) < 0.5 && Math.abs(n.cur.y - p.y) < 0.5 && Math.abs(n.cur.w - p.w) < 0.5); });
+          return arrived ? JSON.stringify(m.S.cam) : ""; });
+        if (s && s === last) return; last = s; await q.waitForTimeout(300); }
+      bad.push(`${tag}: the canvas never comes to rest`); };
+    await tap('[data-mode="bs"]'); await q.waitForTimeout(400); await settle(); if ((await q.evaluate(() => document.documentElement.dataset.mode)) !== "bs") bad.push(`${tag}: tapping Brainstorm did not switch mode`); await check("bs"); await shot("bs");
+    await tap('[data-mode="pm"]'); await q.waitForTimeout(600);
+    await tap('[data-span="week"]'); await q.waitForTimeout(400); await settle(); if (!(await q.evaluate(() => document.querySelector('[data-span="week"]').classList.contains("on")))) bad.push(`${tag}: tapping Week did nothing`); await check("week"); await shot("week");
+    // every window tap must visibly answer under the buttons, and Custom keeps a count beside its two date inputs, all on screen
+    const info = () => q.evaluate(() => { const e = document.getElementById("spanInfo"), r = e.getBoundingClientRect(); return { txt: e.innerText.trim(), shown: r.width > 0 && r.left >= -1 && r.right <= innerWidth + 1 }; });
+    const iw = await info(); await tap('[data-span="custom"]'); await q.waitForTimeout(800); const ic = await info();
+    const dates = await q.evaluate(() => ["from", "to"].every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.width >= 90 && r.left >= -1 && r.right <= innerWidth + 1 && r.height >= 36; }));
+    if (!ic.shown || !/\d+ chats/.test(ic.txt)) bad.push(`${tag}: Custom drops the chat count ("${ic.txt}")`); if (!dates) bad.push(`${tag}: Custom's date inputs are clipped or too small to tap`);
+    await tap('[data-span="today"]'); await q.waitForTimeout(1200); const it = await info(); if (it.txt === iw.txt) bad.push(`${tag}: the summary reads the same for Week and Today ("${it.txt}")`);
+    await tap("#lens"); await q.waitForTimeout(700); if (await q.evaluate(() => document.getElementById("insights").hidden)) bad.push(`${tag}: tapping Retro opened nothing`);
+    await check("retro"); await shot("retro");
+    const sink = q.locator("#insights .sink").first(); await sink.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {}); await sink.tap({ timeout: 3000 }).catch(() => bad.push(`${tag}: cannot tap a time sink`)); await q.waitForTimeout(900);
+    await q.waitForTimeout(500); // the camera flies to the highlighted chats; at least one must be on screen and not under the sheet
+    const seen = await q.evaluate(() => [...document.querySelectorAll(".n.hl")].filter((e) => { const r = e.getBoundingClientRect(), x = r.left + Math.min(r.width / 2, 40), y = r.top + Math.min(r.height / 2, 20); return x > 0 && x < innerWidth && y > 0 && y < innerHeight && document.elementFromPoint(x, y)?.closest(".n") === e; }).length);
+    if (!(await q.evaluate(() => document.querySelectorAll(".n.hl").length))) bad.push(`${tag}: tapping a time sink highlighted nothing`); else if (!seen) bad.push(`${tag}: the sink's chats are highlighted but hidden (off screen or under the sheet)`);
+    await shot("sink");
+    await tap("#insights"); await q.waitForTimeout(400); if (await q.evaluate(() => document.getElementById("insights").classList.contains("peek"))) bad.push(`${tag}: the folded retro sheet does not reopen on tap`);
+    if (!(await q.evaluate(() => { const s = document.getElementById("insights"); return s.scrollHeight <= s.clientHeight || getComputedStyle(s).overflowY !== "visible"; }))) bad.push(`${tag}: retro sheet cannot scroll`);
+    // the sheet closes from inside itself (its own close button), and the Retro pill toggles it back
+    await tap("#insights .x"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: the retro sheet's close button does not close it`);
+    await tap("#lens"); await q.waitForTimeout(500); await tap("#lens"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: Retro does not close by touch`);
+    // the lowest tappable chat card: the worst case, since the sheet rises over it
+    const hit = await q.evaluate(() => { let best = null; for (const e of document.querySelectorAll("#nodes .n-session")) { const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 30); if (x > 10 && x < innerWidth - 10 && y > 120 && y < innerHeight - 100 && document.elementFromPoint(x, y)?.closest(".n") === e && (!best || y > best[1])) best = [x, y]; } return best; });
+    if (!hit) bad.push(`${tag}: no chat card is tappable on the first screen`); else {
+      await q.touchscreen.tap(hit[0], hit[1]); await q.waitForTimeout(900);
+      if (await q.evaluate(() => document.getElementById("drawer").hidden)) bad.push(`${tag}: tapping a chat card opened no drawer`); else { await q.waitForTimeout(500); await check("drawer"); await shot("drawer");
+        if (!(await q.evaluate(() => { const e = document.querySelector(".n.sel"), r = e?.getBoundingClientRect(); if (!r) return false; const x = r.left + Math.min(r.width / 2, 40), y = r.top + Math.min(r.height / 2, 24); return x > 0 && x < innerWidth && y > 0 && document.elementFromPoint(x, y)?.closest(".n") === e; }))) bad.push(`${tag}: the open drawer hides the card that was tapped`); await tap("#drawer .x").catch(() => bad.push(`${tag}: drawer has no tappable close`)); await q.waitForTimeout(500); }
+    }
+    const c = await ctx.newCDPSession(q), cam = () => q.evaluate(() => ({ ...window.__mission.S.cam })), t = (type, pts) => c.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const k0 = await cam(); await t("touchStart", [[w / 2 - 30, h / 2], [w / 2 + 30, h / 2]]); for (let i = 1; i <= 6; i++) await t("touchMove", [[w / 2 - 30 - i * 15, h / 2], [w / 2 + 30 + i * 15, h / 2]]); await t("touchEnd", []);
+    const k1 = await cam(); if (!(k1.k > k0.k * 1.5)) bad.push(`${tag}: pinch-out did not zoom (k ${k0.k.toFixed(3)} -> ${k1.k.toFixed(3)})`);
+    await t("touchStart", [[w / 2, h / 2]]); for (let i = 1; i <= 6; i++) await t("touchMove", [[w / 2 + i * 20, h / 2 + i * 10]]); await t("touchEnd", []);
+    const k2 = await cam(); if (Math.abs(k2.x - k1.x) < 60) bad.push(`${tag}: one-finger drag did not pan`); if (!(await q.evaluate(() => document.getElementById("drawer").hidden))) bad.push(`${tag}: a pan opened the drawer`);
+    const sb = await q.locator("#scrub").boundingBox(), clk = () => q.evaluate(() => document.getElementById("clock").textContent), c0 = await clk();
+    await q.touchscreen.tap(sb.x + sb.width * 0.3, sb.y + sb.height / 2); await q.waitForTimeout(500); if ((await clk()) === c0) bad.push(`${tag}: tapping the scrubber did not move the clock`);
+    // responsiveness: the slowest tap's own handler time (processingStart..End, i.e. the app's work, not the host's queueing);
+    // web-vitals calls an interaction over 500 ms poor. Host load inflates it, so the verdict that counts runs on Boat
+    // a real slow handler repeats; a busy-host spike does not: re-tap the worst control once and fail only if it is slow again
+    const worst = () => q.evaluate(() => window.__inp.sort((x, y) => y.run - x.run)[0]); let inp = await worst();
+    if (inp && inp.run > 500) { const first = inp, sel = /^(today|week|project|custom)$/.test(first.t) ? `[data-span="${first.t}"]` : first.t ? `#${first.t}` : null;
+      if (sel) { await q.evaluate(() => (window.__inp = [])); await tap(sel); await q.waitForTimeout(1500); inp = await worst(); }
+      if (!sel || (inp && inp.run > 500)) bad.push(`${tag}: a tap on ${first.t || first.n} blocks the page ${first.run} ms, again ${inp?.run ?? "?"} ms (INP poor > 500)`); }
+    console.log(tag, "slowest tap", inp ? `${inp.t || inp.n} ${inp.run}ms run / ${Math.round(inp.d)}ms total` : "n/a");
+    console.log(tag, "pinch", k0.k.toFixed(3), "->", k1.k.toFixed(3), "pan", Math.round(k2.x - k1.x), "clock", c0, "->", await clk());
+    await ctx.close();
   }
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);

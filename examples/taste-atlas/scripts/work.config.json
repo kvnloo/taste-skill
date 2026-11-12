@@ -14,7 +14,8 @@
     "aodl-views": { "path": "/mnt/zer0models/workspace/zer0/products/aodl-views", "gh": "kvnloo/aodl-views" },
     "aodl": { "path": "/mnt/zer0models/github/aodl", "gh": "kvnloo/aodl" },
     "fframestudio": { "path": "/mnt/zer0models/workspace/zer0/products/fframestudio", "gh": "kvnloo/fframestudio" },
-    "ephemeral-ui": { "path": "/mnt/zer0models/github/ephemeral-ui", "gh": "kvnloo/ephemeral-ui" }
+    "ephemeral-ui": { "path": "/mnt/zer0models/github/ephemeral-ui", "gh": "kvnloo/ephemeral-ui" },
+    "kvnloo-skills": { "path": "/mnt/zer0models/worktrees/kvnloo-skills/north-star-repair", "gh": "kvnloo/kvnloo-skills" }
   },
   "products": [
     {
@@ -110,6 +111,14 @@
         { "id": "importers", "name": "Importers", "keywords": ["import\\w*", "linkedin", "history"], "paths": { "taste": ["examples/taste-atlas/scripts/**"] } },
         { "id": "skill", "name": "Taste skill", "keywords": ["taste skill", "skill"], "paths": { "taste": ["skills/**"] } },
         { "id": "repo", "name": "Repo & CI", "paths": { "taste": ["tests/**", ".github/**", "*.md", ".claude-plugin/**", ".codex-plugin/**", "examples/**"] } }
+      ]
+    },
+    {
+      "id": "skillshub", "name": "Skillshub", "seed": "skillshub", "atlas": "skills", "keywords": ["skills? ?hub", "kvnloo-skills", "skill (ontology|taxonomy|router|rank\\w*)", "skill-rank"],
+      "components": [
+        { "id": "hub", "name": "Hub repo", "keywords": ["skills? ?hub", "kvnloo-skills", "manifest"], "paths": { "kvnloo-skills": ["**"] },
+          "pages": [{ "name": "Skills atlas", "url": "http://127.0.0.1:8789/?atlas=skills#project:skillshub" }] },
+        { "id": "atlas", "name": "Skills atlas", "keywords": ["skills atlas", "skill (ontology|taxonomy)"], "paths": { "taste": ["examples/taste-atlas/scripts/skills.mjs"] } }
       ]
     }
   ]

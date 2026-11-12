@@ -3,7 +3,7 @@
 // Loads ./data/bookmarks.atlas.json and ./data/sources.atlas.json if present (gitignored; never shipped). Adds count badges on
 // technique nodes, a constellation of every post around the ring, a shelf listing the posts under the
 // current focus (filterable by subject), "recorded examples" on the lineage card, and a detail view.
-import { TECHNIQUES, opById, lineage } from "./taxonomy.js";
+import { TECHNIQUES, opById, lineage, MODE } from "./taxonomy.js";
 import { viewOf, setView } from "./nav.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -22,7 +22,10 @@ const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.deco
 
 export async function mountBookmarks(A, { go, fly }) {
   const get = (f) => fetch(f, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [data0, src0, hist, net, links] = await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json"), get("./data/history.atlas.json"), get("./data/network.atlas.json"), get("./data/links.atlas.json")]);
+  // An alternative atlas (?atlas=skills) brings its own records and layers in ./data/<mode>.atlas.json (scripts/skills.mjs).
+  const [data0, src0, hist, net, links] = MODE ? [null, await get(`./data/${MODE}.atlas.json`), null, null, null]
+    : await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json"), get("./data/history.atlas.json"), get("./data/network.atlas.json"), get("./data/links.atlas.json")]);
+  for (const [l, d] of Object.entries(src0?.layers ?? {})) { LAYERS[l] = d.name; LCOL[l] = d.color; if (d.open) OPEN[l] = d.open; NAMED.add(l); if (d.outer) OUTER_ONLY.add(l); }
   // Watch/listen history (scripts/history.mjs) joins the sources layers; it is unlabelled, so it lists in the shelf.
   // LinkedIn connections (scripts/network.mjs) join as one more layer: a person is a tile, grouped by company hub.
   const hubs = new Map((net?.nodes ?? []).filter((n) => n.type === "company").map((n) => [n.label, n.reach]));
@@ -58,7 +61,7 @@ export async function mountBookmarks(A, { go, fly }) {
   const T = 44, G = 6, R0 = 1840, tiles = [], ext = new Map();
   const slot = Math.min(...A.graph.leaves.slice(1).map((l, i) => Math.abs(l.a - A.graph.leaves[i].a)));
   for (const [id, all] of byTech) {
-    const n = A.graph.byId.get(id), list = all.filter((b) => b.thumb); if (!n || !list.length) continue;
+    const n = A.graph.byId.get(id), list = all.filter((b) => b.thumb || b.tile); if (!n || !list.length) continue; // tile: a record with no picture, drawn as a labelled square
     const a0 = n.children[0].a - slot / 2, span = n.children.at(-1).a - n.children[0].a + slot;
     let r = R0, k = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     while (k < list.length) {
@@ -79,15 +82,16 @@ export async function mountBookmarks(A, { go, fly }) {
   const outer = new Map();
   // Big layers get a sector each; the small ones (portfolio, asks, films, studied, projects, ideas) share one.
   const SECTORS = { saved: "X bookmarks · unsorted", youtube: "YouTube", github: "GitHub stars", linkedin: "LinkedIn", web: "Web bookmarks", sources: "Your work & sources" };
+  for (const [l, d] of Object.entries(src0?.layers ?? {})) SECTORS[l] = d.name;
   const sectorOf = (l) => (SECTORS[l] ? l : "sources");
   for (const b of everything) if (!b.technique) { const k = sectorOf(b.layer ?? "saved"); outer.get(k)?.push(b) ?? outer.set(k, [b]); }
   const groups = new Map(); // "layer:name" -> { key, layer, name, items, box, at }
   const R1 = Math.max(R0, ...tiles.map((t) => Math.hypot(t.x, t.y))) + 5 * T, nOut = [...outer.values()].reduce((a, l) => a + l.length, 0), GAP = 0.05;
   let a0 = -Math.PI / 2;
   // Small sectors sit between big ones so their titles never meet.
-  for (const [layer, list] of ["linkedin", "saved", "web", "youtube", "sources", "github"].filter((l) => outer.has(l)).map((l) => [l, outer.get(l)])) {
+  for (const [layer, list] of [...new Set(["linkedin", "saved", "web", "youtube", "sources", "github", ...outer.keys()])].filter((l) => outer.has(l)).map((l) => [l, outer.get(l)])) {
     const by = new Map();
-    for (const b of list) { const g = String((GROUP[layer] ?? (() => LAYERS[layer] ?? layer))(b) || "Other"); by.get(g)?.push(b) ?? by.set(g, [b]); }
+    for (const b of list) { const g = String((GROUP[layer] ?? ((b) => b.group ?? LAYERS[layer] ?? layer))(b) || "Other"); by.get(g)?.push(b) ?? by.set(g, [b]); }
     if (layer === "youtube" || layer === "github" || layer === "web") for (const [g, l] of by) if (l.length < 3 && g !== "Other") { by.delete(g); by.get("Other")?.push(...l) ?? by.set("Other", [...l]); }
     const rank = (g, l) => (g === "Other" ? -1 : layer === "linkedin" ? hubs.get(g) ?? 0 : l.length);
     const ordered = [...by].sort(([g, l], [h, m]) => rank(h, m) - rank(g, l));
@@ -356,6 +360,8 @@ export async function mountBookmarks(A, { go, fly }) {
   A.view.cardExtra = (f) => {
     const t = f.level === 4 ? f.parent : f; if (t.level !== 3) return "";
     const list = (byTech.get(t.id) ?? []).filter((b) => b.thumb);
+    if (!list.length && MODE) { const by = new Map(); for (const b of byTech.get(t.id) ?? []) by.set(b.layer, (by.get(b.layer) ?? 0) + 1);
+      return by.size ? `<div class="examples"><div class="k">${[...by].map(([l, n]) => `${n} ${esc(LAYERS[l] ?? l).toLowerCase()}`).join(" · ")}</div>${t.ui ? `<div class="mech">${esc(t.ui)}</div>` : ""}</div>` : ""; }
     if (!list.length) return "";
     return `<div class="examples"><div class="k">${list.length} of your posts</div><div class="ex-row">${list.slice(0, 6).map((b) => `<img data-post="${b.id}" src="./data/${esc(b.thumb)}" alt="" title="${esc(b.text.slice(0, 80))}" />`).join("")}</div></div>`;
   };
@@ -389,7 +395,7 @@ export async function mountBookmarks(A, { go, fly }) {
     list = [...list].sort((a, b) => !a.thumb - !b.thumb || (n.level === 0 ? (b.score ?? 0) - (a.score ?? 0) : 0));
     const title = query ? `“${query}”` : custom ? custom.title : pickKey ? (pickKey.startsWith("L:") ? groups.get(pickKey).name : `${LAYERS[groups.get(pickKey).layer]} · ${groups.get(pickKey).name}`) : n.level === 0 ? (layer ? LAYERS[layer] : "Everything") : (n.level === 4 ? n.parent : n).name;
     shelf.className = "shelf" + (open ? " open" : "") + (wide && open ? " wide" : "");
-    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : custom ? custom.kind ?? "YOUR WORK" : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${custom && !query ? custom.n : list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
+    shelf.innerHTML = `<header><button class="tog" title="Toggle shelf (b)">${open ? "›" : "‹"}</button><div><small>${query ? `SEARCH · <a href="#" class="clr">clear</a>` : custom ? custom.kind ?? "YOUR WORK" : MODE ? MODE.toUpperCase() : "YOUR TASTE"}</small><b>${esc(title)}</b> <span>${custom && !query ? custom.n : list.length}</span></div><button class="wid" title="${wide ? "Back to the atlas" : "Library: full-screen mosaic"} (m)">${wide ? "▢" : "⤢"}</button></header>
       <div class="chips">${["all", ...subjects].map((s) => `<button data-s="${s}" class="${(s === "all" && !subject && !layer) || s === subject ? "on" : ""}">${s === "all" ? "All" : SUBJECT_NAMES[s] ?? s}</button>`).join("")}${layers.map((l) => `<button data-l="${l}" class="layer${l === layer ? " on" : ""}">${LAYERS[l]}</button>`).join("")}</div>
       <div class="grid">${custom && !query ? custom.html : ""}${list.slice(0, shown).map((b) => {
         const t = techById.get(b.technique), op = t ? opById[t.op] : { color: "#888" }, who = OWN.has(b.layer) ? b.title ?? b.author : NAMED.has(b.layer) ? b.author : "@" + b.author;

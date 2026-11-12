@@ -1,6 +1,6 @@
 // Interactive app: camera tweening, click-to-focus, search, theme, deep links (#technique-id).
 import { createAtlas, stats } from "./atlas.js";
-import { OPERATIONS, opById } from "./taxonomy.js";
+import { OPERATIONS, opById, LEVELS, NOUN, MODE } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { mountWork } from "./work.js";
 import { mountLens } from "./lens.js";
@@ -116,7 +116,7 @@ function show() {
     ? `<div data-g="${n.g.key.replace(/"/g, "&quot;")}" class="${i === sel ? "sel" : ""}">${n.g.name.replace(/</g, "&lt;")}<small>${n.g.sub} · ${n.g.n.toLocaleString()}</small></div>`
     : n.lib
     ? `<div data-lib="1" class="lib ${i === sel ? "sel" : ""}">${n.lib} of your posts<small>show in Library ↵</small></div>`
-    : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
+    : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${LEVELS[n.level - 1].toLowerCase()} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
 }
 const pickHit = (h) => { if (!h) return; if (h.w) { q.value = ""; window.__atlas.bm?.setQuery(""); hits.className = ""; q.blur(); if (window.__atlas.lens && !h.w.id.includes("/")) location.hash = "#project:" + h.w.id; else window.__atlas.work.focus(h.w.id); return; } if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
 q.addEventListener("input", show);
@@ -142,7 +142,7 @@ addEventListener("resize", () => { A.view.labelScale = phone() ? 0.8 : 1; if (!t
 addEventListener("hashchange", () => { const id = location.hash.slice(1); if (A.graph.byId.has(id) && id !== A.view.focus) go(id); });
 
 const st = stats();
-document.getElementById("stat").textContent = `${OPERATIONS.length} operations · ${st.techniques} techniques · ${st.executions} specimens`;
+document.getElementById("stat").textContent = `${OPERATIONS.length} ${NOUN.operation} · ${st.techniques} ${NOUN.technique} · ${st.executions} ${NOUN.execution}`;
 theme(getTheme());
 A.view.labelScale = phone() ? 0.8 : 1;
 A.view.cam = fitR("root");
@@ -160,7 +160,7 @@ card.addEventListener("click", async (e) => {
   b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => A.invalidate(), 1400);
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
-mountBookmarks(A, { go, fly }).then((bm) => { if (!bm) firstRun(); if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
+mountBookmarks(A, { go, fly }).then((bm) => { if (!bm) firstRun(); if (bm) document.getElementById("stat").textContent += MODE ? ` · ${bm.sources.toLocaleString()} records` : ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
   .then((work) => { window.__atlas.work = work; return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
   .then((bf) => { window.__atlas.boards = bf; return mountLens(A, { bm: window.__atlas.bm, fly }); })
   .then((lens) => { window.__atlas.lens = lens; }).catch((e) => console.error("work:", e));

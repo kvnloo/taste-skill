@@ -28,17 +28,24 @@ export const ICONS = {
 };
 const icon = (k, size = 20) => `<svg viewBox="0 0 20 20" width="${size}" height="${size}">${ICONS[k] ?? ICONS.technique}</svg>`;
 
+// In an alternate atlas the hub carries more operations than taste's six: their labels go out to an on-screen ring
+// whose circumference holds every name (≈0.62em per letter + a margin), not a fixed hop from the hub.
+let LABEL_R = 0;
 // Radial tree: leaves get equal arc, operations are separated by a gap.
 export function layout() {
   const { root, byId } = buildTree();
   const leaves = [];
   const walk = (n) => (n.children.length ? n.children.forEach(walk) : leaves.push(n));
   walk(root);
+  LABEL_R = (1.15 * root.children.reduce((w, o) => w + 0.62 * 17 * o.name.length + 24, 0)) / (2 * Math.PI);
   const k = Math.max(1, leaves.length / 140); RADII = [0, 320 * Math.sqrt(k), 700 * Math.sqrt(k), 1100 * k, 1680 * k];
-  const gap = 1.6 * Math.max(1, leaves.length / 140), total = leaves.length + gap * root.children.length;
-  let slot = gap / 2, lastOp = leaves[0].op;
+  // A small operation is padded up to a minimum arc so its label never sits on its neighbour's (a no-op for taste).
+  const count = {}; for (const l of leaves) count[l.op] = (count[l.op] ?? 0) + 1;
+  const min = leaves.length / root.children.length / 2.5, pad = (op) => Math.max(0, min - count[op]) / 2;
+  const gap = 1.6 * Math.max(1, leaves.length / 140), total = leaves.length + root.children.reduce((a, o) => a + gap + 2 * pad(o.id), 0);
+  let slot = gap / 2 + pad(leaves[0].op), lastOp = leaves[0].op;
   for (const l of leaves) {
-    if (l.op !== lastOp) { slot += gap; lastOp = l.op; }
+    if (l.op !== lastOp) { slot += pad(lastOp) + gap + pad(l.op); lastOp = l.op; }
     l.a = -Math.PI / 2 + (slot / total) * Math.PI * 2; slot += 1;
   }
   const angle = (n) => (n.children.length ? (angle(n.children[0]) + angle(n.children[n.children.length - 1])) / 2 : n.a);
@@ -188,7 +195,7 @@ export function createAtlas({ svg, card, width, height }) {
         setA(part.label, "font-size", fs);
         if (n.level === 1) {
           // Operation labels sit outside the ring, anchored away from the centre, so they never pile up.
-          const cx = Math.cos(n.a), cy = Math.sin(n.a), d = 48 + fs * 0.4;
+          const cx = Math.cos(n.a), cy = Math.sin(n.a), d = Math.max(48 + fs * 0.4, MODE ? LABEL_R * (fs / px) - RADII[1] : 0);
           setA(part.label, "x", (cx * d).toFixed(1));
           setA(part.label, "y", (cy * d + fs * 0.35 + (Math.abs(cx) < 0.3 ? Math.sign(cy) * fs * 0.6 : 0)).toFixed(1));
           setA(part.label, "text-anchor", Math.abs(cx) < 0.3 ? "middle" : cx > 0 ? "start" : "end");

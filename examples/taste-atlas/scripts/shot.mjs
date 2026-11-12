@@ -7,6 +7,27 @@ const out = process.argv[2] ?? ".";
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
 const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// LENS=1: the overview hides posts the taxonomy never placed; #project:<id> lights only that project's posts (plus a
+// few greyed neighbours) and the shelf lists the project's resources in sections, not just its journey.
+if (process.env.LENS) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
+  const q = await b.newPage({ viewport: { width: 1440, height: 900 } }); q.on("pageerror", (e) => errs.push(String(e)));
+  await q.goto(`${base}/`); await q.evaluate(() => (localStorage.removeItem("taste:loose"), localStorage.removeItem("taste:hidden2"))); await q.reload();
+  await q.waitForFunction(() => window.__atlas?.lens, null, { timeout: 30000 });
+  const root = await q.evaluate(() => ({ shown: window.__atlas.bm.tilesShown(), loose: document.querySelector(".layers [data-loose]")?.className, linkedin: !!document.querySelector('.layers [data-layer="linkedin"]') }));
+  if (root.loose !== "" || root.linkedin) bad.push("overview shows unsorted layers: " + JSON.stringify(root));
+  await q.screenshot({ path: `${out}/lens-root.png` });
+  await q.goto(`${base}/#project:glide`); await q.reload(); await q.waitForFunction(() => document.querySelectorAll(".ln h4").length, null, { timeout: 30000 });
+  const lens = await q.evaluate(() => ({ kind: document.querySelector(".shelf header small")?.innerText, secs: [...document.querySelectorAll(".ln h4")].map((h) => h.firstChild.textContent.trim()), lit: document.querySelectorAll(".node.on").length, body: document.body.classList.contains("lens") }));
+  console.log("lens", JSON.stringify({ root, lens }));
+  if (lens.kind !== "PROJECT" || !lens.body) bad.push("project lens did not open");
+  for (const s of ["User journey", "Repos", "Pull requests", "Components", "Inspiration"]) if (!lens.secs.includes(s)) bad.push("lens lacks section " + s);
+  if (!lens.lit) bad.push("no technique lit for the project's posts");
+  await q.screenshot({ path: `${out}/lens-glide.png` });
+  await q.selectOption(".layers select.projpick", ""); if (await q.evaluate(() => document.body.classList.contains("lens") || location.hash.startsWith("#project:"))) bad.push("clearing the project picker left the lens on");
+  if (errs.length) bad.push(...errs);
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // HISTORY=1: check /history (desktop + phone): one card per imported source, calendars drawn, covers load, no errors.
 if (process.env.HISTORY) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
@@ -58,7 +79,7 @@ if (process.env.LAYERS) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
   for (const [name, vp] of [["layers-desk", { width: 1440, height: 900 }], ["layers-phone", { width: 390, height: 844 }]]) {
     const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
-    await q.goto(`${base}/?theme=dark`); await q.evaluate(() => localStorage.removeItem("taste:hidden")); await q.reload();
+    await q.goto(`${base}/?theme=dark`); await q.evaluate(() => (localStorage.setItem("taste:hidden2", "[]"), localStorage.setItem("taste:loose", "1"))); await q.reload();
     await q.waitForFunction(() => window.__atlas?.bm, null, { timeout: 30000 }); await q.waitForTimeout(2500);
     await q.screenshot({ path: `${out}/${name}.png` });
     const r0 = await q.evaluate(() => ({ bar: [...document.querySelectorAll(".layers button")].map((x) => x.dataset.layer), tiles: window.__atlas.bm.tilesShown() }));
@@ -74,7 +95,7 @@ if (process.env.LAYERS) {
     await q.evaluate(() => window.__atlas.go("root")); await q.waitForTimeout(1200);
     await q.screenshot({ path: `${out}/${name}-hidden.png` });
     const rects = await q.evaluate(() => Object.fromEntries([".layers", ".legend", ".shelf", "#card", ".search"].map((s) => { const e = document.querySelector(s), r = e?.getBoundingClientRect(); return [s, r && getComputedStyle(e).display !== "none" ? [r.left, r.top, r.right, r.bottom].map(Math.round) : null]; })));
-    await q.evaluate(() => localStorage.removeItem("taste:hidden"));
+    await q.evaluate(() => (localStorage.setItem("taste:hidden2", "[]"), localStorage.setItem("taste:loose", "1")));
     console.log(name, JSON.stringify({ ...r0, hit, shelf, hiddenTiles: t1, rects }));
     for (const l of ["saved", "youtube", "github", "linkedin"]) if (!r0.bar.includes(l)) bad.push(`${name}: no ${l} layer toggle`);
     if (!/nvidia/i.test(hit)) bad.push(`${name}: search found no NVIDIA category`); if (!/LinkedIn · NVIDIA/.test(shelf)) bad.push(`${name}: shelf not on the picked category ("${shelf}")`);
@@ -96,7 +117,7 @@ if (process.env.WORK) {
   const centre = (q, id) => q.evaluate((id) => window.__atlas.work.screen(id), id);
   const clickNode = async (q, id, dy = 0) => { const c = await centre(q, id); await q.mouse.click(c.x, c.y + dy * c.r); await q.waitForTimeout(1300); };
   const pg = async (vp, theme) => { const q = await b.newPage(vp); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && errs.push(m.text()));
-    await q.goto(`${base}/?theme=${theme}`); await q.evaluate(() => localStorage.removeItem("taste:hidden")); await q.reload(); await ready(q); return q; };
+    await q.goto(`${base}/?theme=${theme}`); await q.evaluate(() => (localStorage.setItem("taste:hidden2", "[]"), localStorage.setItem("taste:loose", "1"))); await q.reload(); await ready(q); return q; };
   const onScreen = (q) => q.evaluate(() => { const w = window.__atlas.work; return w.data.products.filter((p) => { const s = w.screen(p.id); return s.x > 0 && s.x < innerWidth && s.y > 0 && s.y < innerHeight && s.r > 8; }).length; });
   const q = await pg({ viewport: { width: 1440, height: 900 } }, "dark");
   await q.evaluate(() => window.__atlas.work.focus(null)); await q.waitForTimeout(1300);

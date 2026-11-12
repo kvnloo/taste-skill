@@ -14,7 +14,7 @@ const A = createAtlas({ svg, card, width: () => innerWidth, height: () => innerH
 const phone = () => innerWidth <= 700;
 function region(avoidCard) {
   const shelf = document.querySelector(".shelf")?.getBoundingClientRect();
-  if (phone()) { const top = (card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
+  if (phone()) { const top = (document.body.classList.contains("project-focus") ? 100 : card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
   // The mosaic shelf covers the whole graph (left: 18px); fitting into the zero-width gap gave scale Infinity.
   const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth, x = avoidCard ? card.getBoundingClientRect().right + 12 : 0;
   return { x, y: 0, w: free - x < 240 ? innerWidth : free - x, h: innerHeight };

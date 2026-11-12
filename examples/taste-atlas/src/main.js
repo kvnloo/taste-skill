@@ -3,6 +3,7 @@ import { createAtlas, stats } from "./atlas.js";
 import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { mountWork } from "./work.js";
+import { mountLens } from "./lens.js";
 import { mountBoardFilter } from "./boardfilter.js";
 import { brief, briefMarkdown } from "./brief.js";
 import { mountNav, getTheme, saveTheme, setView } from "./nav.js";
@@ -117,7 +118,7 @@ function show() {
     ? `<div data-lib="1" class="lib ${i === sel ? "sel" : ""}">${n.lib} of your posts<small>show in Library ↵</small></div>`
     : `<div data-id="${n.id}" class="${i === sel ? "sel" : ""}">${n.name}<small>${["", "operation", "domain", "technique", "specimen"][n.level]} · ${opById[n.op].name}</small></div>`).join("") || `<div class="none">No technique or post matches</div>`;
 }
-const pickHit = (h) => { if (!h) return; if (h.w) { q.value = ""; window.__atlas.bm?.setQuery(""); hits.className = ""; q.blur(); window.__atlas.work.focus(h.w.id); return; } if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
+const pickHit = (h) => { if (!h) return; if (h.w) { q.value = ""; window.__atlas.bm?.setQuery(""); hits.className = ""; q.blur(); if (window.__atlas.lens && !h.w.id.includes("/")) location.hash = "#project:" + h.w.id; else window.__atlas.work.focus(h.w.id); return; } if (h.g) { const bm = window.__atlas.bm; q.value = ""; bm.setQuery(""); hits.className = ""; q.blur(); bm.pick(h.g.key); return; } if (h.lib) { setView("library"); hits.className = ""; q.blur(); return; } go(h.id); q.value = ""; show(); q.blur(); };
 q.addEventListener("input", show);
 q.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { sel = (sel + (e.key === "ArrowDown" ? 1 : found.length - 1)) % Math.max(1, found.length); [...hits.children].forEach((d, i) => d.classList.toggle("sel", i === sel)); e.preventDefault(); }
@@ -161,5 +162,6 @@ card.addEventListener("click", async (e) => {
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
 mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
   .then((work) => { window.__atlas.work = work; return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
-  .then((bf) => { window.__atlas.boards = bf; }).catch((e) => console.error("work:", e));
+  .then((bf) => { window.__atlas.boards = bf; return mountLens(A, { bm: window.__atlas.bm, fly }); })
+  .then((lens) => { window.__atlas.lens = lens; }).catch((e) => console.error("work:", e));
 requestAnimationFrame(frame);

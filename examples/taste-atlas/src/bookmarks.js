@@ -15,6 +15,7 @@ const LAYERS = { saved: "X bookmarks", portfolio: "Portfolio", ask: "Asked about
 const LCOL = { saved: "#d24b2a", youtube: "#e62117", github: "#6e5494", linkedin: "#0a66c2", spotify: "#1db954" };
 const lcol = (l) => LCOL[l] ?? "#8a857a";
 const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗", youtube: "Watch on YouTube ↗", spotify: "Play on Spotify ↗", tidal: "Play on TIDAL ↗", music: "Open ↗", github: "Open on GitHub ↗", linkedin: "Open on LinkedIn ↗" };
+const OUTER_ONLY = new Set(["youtube", "github", "linkedin", "spotify", "tidal", "music"]); // layers with no place in the taxonomy
 const OWN = new Set(["film", "idea", "portfolio"]); // your own work: show its name, not an @handle
 const NAMED = new Set(["youtube", "spotify", "tidal", "music", "linkedin"]); // channels and artists are names, not @handles
 const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.decoding = "async"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
@@ -73,7 +74,7 @@ export async function mountBookmarks(A, { go, fly }) {
   }
   // Outer ring: every item with no technique (watch history, stars, LinkedIn, unsorted saves, sources) sits in its
   // layer's sector beyond the constellation, grouped by category (channel, language, company) in reading order.
-  const hidden = new Set(JSON.parse(localStorage.getItem("taste:hidden") ?? "[]"));
+  const hidden = new Set(JSON.parse(localStorage.getItem("taste:hidden2") ?? "[\"work\"]"));
   const GROUP = { youtube: (b) => b.author, github: (b) => b.why?.split(" · ")[1] ?? "Other", linkedin: (b) => b.group, saved: () => "Unsorted" };
   const outer = new Map();
   // Big layers get a sector each; the small ones (portfolio, asks, films, studied, projects, ideas) share one.
@@ -109,27 +110,32 @@ export async function mountBookmarks(A, { go, fly }) {
     const ks = key.startsWith("L:") ? [...groups.values()].filter((g) => !g.layerRow && g.sector === key.slice(2)) : [groups.get(key)];
     return ks.filter(Boolean).reduce((m, g) => [Math.min(m[0], g.box[0]), Math.min(m[1], g.box[1]), Math.max(m[2], g.box[2]), Math.max(m[3], g.box[3])], [Infinity, Infinity, -Infinity, -Infinity]);
   };
-  const visible = (t) => !hidden.has(t.b.layer ?? "saved");
+  // Posts the taxonomy never placed (unsorted bookmarks, YouTube, stars, LinkedIn) connect to nothing on the atlas:
+  // they stay off the canvas unless "Unsorted" is switched on; search and the Library still list them.
+  let loose = localStorage.getItem("taste:loose") === "1";
+  const visible = (t) => (!t.outer || loose) && !hidden.has(t.b.layer ?? "saved");
   // The overview fits every visible outer layer as well as the taxonomy.
-  const outerBox = () => [...groups.values()].filter((g) => !g.layerRow && !hidden.has(g.layer)).map((g) => g.box);
+  const outerBox = () => (loose ? [...groups.values()].filter((g) => !g.layerRow && !hidden.has(g.layer)).map((g) => g.box) : []);
   A.extraBounds = (ids) => [...[...ids].map((k) => ext.get(k)).filter(Boolean), ...(ids.has?.(A.graph.root.id) ? outerBox() : [])];
   // A picked category (from search or the layer bar): its tiles stay lit and the shelf lists it until focus changes.
   let pickKey = null;
   const pickSet = (key) => (key.startsWith("L:") ? new Set([...groups.values()].filter((g) => !g.layerRow && g.sector === key.slice(2)).map((g) => g.key)) : new Set([key]));
   function pick(key, quiet) {
     if (key === pickKey) return; pickKey = key; dirty++; litFor = null; if (key) custom = null;
-    if (key) { for (const g of groups.values()) if (g.key === key || (key.startsWith("L:") && g.sector === key.slice(2))) hidden.delete(g.layer); saveHidden(); fly?.(boxOf(key)); }
+    if (key) { loose = true; localStorage.setItem("taste:loose", "1"); for (const g of groups.values()) if (g.key === key || (key.startsWith("L:") && g.sector === key.slice(2))) hidden.delete(g.layer); saveHidden(); fly?.(boxOf(key)); }
     if (!quiet) draw();
   }
-  const saveHidden = () => { localStorage.setItem("taste:hidden", JSON.stringify([...hidden])); drawBar(); };
+  const saveHidden = () => { localStorage.setItem("taste:hidden2", JSON.stringify([...hidden])); drawBar(); };
   // Layer bar: one toggle per data layer, with its count.
   const bar = document.createElement("nav"); bar.className = "layers"; document.body.appendChild(bar);
   const counts = new Map(); for (const b of everything) counts.set(b.layer ?? "saved", (counts.get(b.layer ?? "saved") ?? 0) + 1);
   function drawBar() {
-    bar.innerHTML = `<b>Layers</b>` + Object.keys(LAYERS).filter((l) => counts.has(l)).map((l) => `<button data-layer="${l}" class="${hidden.has(l) ? "" : "on"}" title="${hidden.has(l) ? "Show" : "Hide"} ${esc(LAYERS[l])}"><i style="background:${lcol(l)}"></i>${esc(LAYERS[l])}<small>${counts.get(l).toLocaleString()}</small></button>`).join("");
+    const nLoose = tiles.filter((t) => t.outer).length;
+    bar.innerHTML = `<b>Layers</b><button data-loose class="${loose ? "on" : ""}" title="${loose ? "Hide" : "Show"} posts the taxonomy has not placed"><i style="background:#8a857a"></i>Unsorted<small>${nLoose.toLocaleString()}</small></button>` + Object.keys(LAYERS).filter((l) => counts.has(l) && (loose || !OUTER_ONLY.has(l))).map((l) => `<button data-layer="${l}" class="${hidden.has(l) ? "" : "on"}" title="${hidden.has(l) ? "Show" : "Hide"} ${esc(LAYERS[l])}"><i style="background:${lcol(l)}"></i>${esc(LAYERS[l])}<small>${counts.get(l).toLocaleString()}</small></button>`).join("");
   }
   drawBar();
   bar.addEventListener("click", (e) => {
+    if (e.target.closest("[data-loose]")) { loose = !loose; localStorage.setItem("taste:loose", loose ? "1" : "0"); if (!loose && pickKey) pickKey = null; drawBar(); dirty++; litFor = null; draw(); return; }
     const l = e.target.closest("[data-layer]")?.dataset.layer; if (!l) return;
     hidden.has(l) ? hidden.delete(l) : hidden.add(l);
     if (pickKey && groups.get(pickKey)?.layer === l && hidden.has(l)) pickKey = null;
@@ -209,7 +215,7 @@ export async function mountBookmarks(A, { go, fly }) {
     ctx.lineCap = "round";
     for (const s of strands) {
       const on = lit && (lit.has(s.p.id) || lit.has(s.q.id));
-      ctx.globalAlpha = lit ? (on ? 0.7 : 0.03) : 0.16; ctx.strokeStyle = opById[s.p.op][dark ? "night" : "color"] ?? opById[s.p.op].color;
+      ctx.globalAlpha = custom?.ids ? 0.025 : lit ? (on ? 0.7 : 0.03) : 0.16; ctx.strokeStyle = opById[s.p.op][dark ? "night" : "color"] ?? opById[s.p.op].color;
       ctx.lineWidth = (Math.min(1 + s.c / 3, 5) * (on ? 1.6 : 1)) / Math.max(c.s, 0.15);
       ctx.beginPath(); ctx.moveTo(s.p.x, s.p.y); ctx.quadraticCurveTo((s.p.x + s.q.x) * 0.25, (s.p.y + s.q.y) * 0.25, s.q.x, s.q.y); ctx.stroke();
     }
@@ -228,7 +234,8 @@ export async function mountBookmarks(A, { go, fly }) {
     for (const t of tiles) {
       if (t.x < vx0 || t.x > vx1 || t.y < vy0 || t.y > vy1 || !visible(t)) continue;
       const on = custom?.ids ? custom.ids.has(t.b.id) : !lit || lit.has(t.id); // a board filter lights its own posts
-      ctx.globalAlpha = on ? 1 : 0.06;
+      if (custom?.ids && !on && !custom.near?.has(t.b.id)) continue; // a project/board shows its posts and a few greyed neighbours, nothing else
+      ctx.globalAlpha = on ? 1 : custom?.ids ? 0.2 : 0.06;
       const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id), h = hires[t.b.id];
       if (on && t.b.thumb && (dp > 180 || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
       const want = on && dp > 520 && px > 240 && h && stillFor(h, dp);
@@ -265,6 +272,7 @@ export async function mountBookmarks(A, { go, fly }) {
     // Layer titles around the ring, and category names once their tiles are big enough to read beside them.
     ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic"; ctx.fillStyle = dark ? "#ece8df" : "#1b1a17";
     for (const g of groups.values()) {
+      if (!loose || custom?.ids) break;
       if ((g.layerRow ? [...groups.values()].every((h) => h.layerRow || h.sector !== g.sector || hidden.has(h.layer)) : hidden.has(g.layer)) || (lit && !g.layerRow && !lit.has(g.key))) continue;
       const fs = g.layerRow ? 15 / c.s : 12 / c.s;
       if (!g.layerRow && px < 12) continue;

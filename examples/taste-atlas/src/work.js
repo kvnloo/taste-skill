@@ -233,7 +233,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   const boxOf = (id) => { const o = L.get(id) ?? { x: 0, y: 0, r: R + 14 }, m = o.r * (C.has(id) ? 1.04 : 1.12); return [o.x - m, o.y - m, o.x + m, o.y + m]; };
   function focusOn(id, screen) {
     if (id && !L.has(id)) return;
-    if (hidden.delete("work")) localStorage.setItem("taste:hidden", JSON.stringify([...hidden])); bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
+    if (hidden.delete("work")) localStorage.setItem("taste:hidden2", JSON.stringify([...hidden])); bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
     focus = id; dirty++;
     if (P.has(id) && pj.has(id)) { pj.enter(id, L.get(id), aspect()); document.body.classList.add("project-focus"); hud.hidden = true; return pick(screen, 900); }
     leave(); fly(boxOf(id ?? "disc"), 900, 24, true);

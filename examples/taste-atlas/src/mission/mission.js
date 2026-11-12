@@ -707,7 +707,8 @@ function renderInsights() {
   }));
 }
 function highlight(ids) {
-  $$(".n.hl").forEach((e) => e.classList.remove("hl")); ids.forEach((id) => nodes.get(id)?.el.classList.add("hl"));
+  // aria-current mirrors the highlight so a screen reader (or the army's semantic tree) knows which chats a sink picked
+  $$(".n.hl").forEach((e) => (e.classList.remove("hl"), e.removeAttribute("aria-current"))); ids.forEach((id) => { const e = nodes.get(id)?.el; e?.classList.add("hl"); e?.setAttribute("aria-current", "true"); });
   S.retroHl = new Set(ids); drawWires();
   const bs = ids.map((id) => nodes.get(id)).filter((n) => n && n.cur.o > 0.5);
   if (bs.length) { const b = { x0: Math.min(...bs.map((n) => n.cur.x)), y0: Math.min(...bs.map((n) => n.cur.y)), x1: Math.max(...bs.map((n) => n.cur.x + n.cur.w)), y1: Math.max(...bs.map((n) => n.cur.y + 190)) };

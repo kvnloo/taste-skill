@@ -13,6 +13,7 @@ export function setView(view, { push = true } = {}) {
   const here = viewOf();
   if ([here, view].some((v) => v === "boards" || v === "history" || v === "network" || v === "mission")) return false; // separate pages
   if (push && view !== here) history.pushState(null, "", (view === "library" ? "/library" : "/") + location.hash);
+  document.title = `Taste · ${view === "library" ? "Library" : "Atlas"}`; // same page, two views: the title says which (army finding)
   dispatchEvent(new CustomEvent("taste:view", { detail: { view } }));
   return true;
 }
@@ -22,6 +23,7 @@ export function mountNav(after) {
   nav.className = "views"; nav.setAttribute("aria-label", "Views");
   nav.innerHTML = VIEWS.map(([k, href, label]) => `<a href="${href}" data-view="${k}">${label}${k === "boards" ? `<i class="n" hidden></i>` : ""}</a>`).join("");
   after.after(nav);
+  if (viewOf() === "library") document.title = "Taste · Library"; // direct load of /library, same rule as setView
   const mark = (v) => nav.querySelectorAll("a").forEach((a) => a.classList.toggle("on", a.dataset.view === v));
   mark(viewOf());
   nav.addEventListener("click", (e) => {

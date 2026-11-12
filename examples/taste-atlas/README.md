@@ -238,14 +238,20 @@ native-size clips; a photo's detail view opens at its original width.
 overlap in either mode, replay reaches the ticker, LIVE pins to now, an Insights failure highlights its chats), then
 walks it on 390×844 and 360×800 touch phones. At every state it fails on sideways scroll, controls off screen, taps
 under 36 px (44 for lone buttons), chrome text under 11 px, overlapping fixed surfaces, a sheet hiding the replay bar,
-fewer than 3 legible chat titles in view, or a drawer covering the card that opened it. It also checks pinch, pan and
+fewer than 3 legible chat titles in view, or a drawer covering the card that opened it. It also fails on a control spilling
+out of its drawn box (segment, row, sheet), a sheet with no close of its own, a window tap that leaves the summary unchanged,
+Custom dropping the count or shrinking its date inputs, and a tap whose own handler runs over 500 ms twice (INP "poor";
+one slow tap on a loaded host is re-tapped, not trusted). States are judged once the canvas is at rest. It also checks pinch, pan and
 scrub. On phones the chrome takes two rows and Retro and the chat drawer become bottom sheets. Picking a sink folds
 the sheet so its chats stay visible.
 
 `e2e/army` is the tester army: vision-model `e2e explore` lanes (`goals.tsv`) at the same phone sizes and desktop. Each
 lane runs in its own Boat sandbox: `cd e2e/army && with-keys.sh python3 boat/up.py`. The `canary-390` lane runs the
 pre-fix build (`e53431c`) and must report its off-screen controls, so a clean report on the real build means
-something. Findings land in `runs/boat/<ts>/findings.json`.
+something. Every lane first runs the deterministic gate (`tests/smoke.e2e.ts`; the canary must fail it), the first lane
+also runs the phone suite above on the sandbox's own CPU, and a lane whose explorer was cut short or lost its model counts
+as a coverage gap, never a pass. The explorer is `nvidia/nemotron-3.5-super-vl-120b-a12b` on NIM (`E2E_MODEL` overrides);
+`up.py` makes one call to it before paying for any sandbox. Findings land in `runs/boat/<ts>/findings.json`.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
 it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
 

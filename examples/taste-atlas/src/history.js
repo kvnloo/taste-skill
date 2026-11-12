@@ -16,7 +16,7 @@ const IMPORT = `<p class="hint">Add more: <code>node scripts/history.mjs &lt;exp
   other music CSV, and any GitHub user through your <code>gh</code> login.</p>`;
 
 const r = await fetch("./data/history.atlas.json", { cache: "no-store" });
-if (!r.ok) { $("#history").innerHTML = `<p class="empty-boards">No history imported yet (${r.status}).</p>${IMPORT}`; throw new Error(`history.atlas.json ${r.status}`); }
+if (!r.ok) { $("#history").innerHTML = `<p class="empty-boards">${r.status === 404 ? "No history imported yet." : `The history could not load (server error ${r.status}).`}</p>${IMPORT}`; throw new Error(`history.atlas.json ${r.status}`); }
 const data = await r.json(), series = data.series ?? {};
 const bySrc = Object.groupBy(data.items, (i) => i.source);
 const srcs = Object.keys(series).sort((a, b) => series[b].events - series[a].events);

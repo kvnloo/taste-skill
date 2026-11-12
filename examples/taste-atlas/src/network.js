@@ -16,7 +16,7 @@ mountNav($(".chrome .brand"));
 const IMPORT = `Import your export (LinkedIn → Settings → Data privacy → Get a copy of your data):<br><code>node scripts/network.mjs Basic_LinkedInDataExport.zip</code>`;
 
 const r = await fetch("/data/network.atlas.json", { cache: "no-store" });
-if (!r.ok) { document.body.insertAdjacentHTML("beforeend", `<div class="empty-net"><p>No network imported yet (${r.status}).</p><p>${IMPORT}</p></div>`); throw new Error(`network.atlas.json ${r.status}`); }
+if (!r.ok) { document.body.insertAdjacentHTML("beforeend", `<div class="empty-net"><p>${r.status === 404 ? "No network imported yet." : `The network could not load (server error ${r.status}).`}</p><p>${IMPORT}</p></div>`); throw new Error(`network.atlas.json ${r.status}`); }
 const data = await r.json(), byId = new Map(data.nodes.map((n) => [n.id, n]));
 const COL = { me: "--ink", company: "#2f6fd6", mine: "#1f8a5b", fof: "#7b3fa0" };
 const css = (v) => getComputedStyle(root).getPropertyValue(v).trim();

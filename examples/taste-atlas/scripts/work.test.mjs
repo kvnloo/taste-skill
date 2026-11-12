@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildWork, matcher, parseLog, checks, liveStatus, attachAsks, ghCache } from "./work.mjs";
+import { buildWork, matcher, parseLog, checks, liveStatus, attachAsks, ghCache, deepPages } from "./work.mjs";
 import { weightAt, packCircles, fitInCircle } from "../src/pack.js";
 
 const NOW = 1_794_000_000, H = 3600, D = 86400;
@@ -114,4 +114,16 @@ test("never writes a file into the repo it reads", async () => {
   const before = execFileSync("git", ["-C", repo, "status", "--porcelain"], { encoding: "utf8" });
   await build(); assert.equal(execFileSync("git", ["-C", repo, "status", "--porcelain"], { encoding: "utf8" }), before);
   assert.ok(!readFileSync(join(repo, ".git/HEAD"), "utf8").includes("work"));
+});
+
+test("private overlay adds a whole product with its repos, and only pages to existing ones", () => {
+  const cfg = { repos: { a: { path: "/a" } }, products: [{ id: "p", components: [{ id: "web", paths: { a: ["**"] } }] }] };
+  const out = deepPages(cfg, { repos: { b: { path: "/b" } }, products: [
+    { id: "p", components: [{ id: "web", pages: [{ name: "Local", url: "http://x" }], paths: { b: ["evil/**"] } }] },
+    { id: "q", components: [{ id: "docs", paths: { b: ["docs/**"] } }] },
+    { id: "empty", components: [] }] });
+  assert.deepEqual(Object.keys(out.repos), ["a", "b"]);
+  assert.deepEqual(out.products.map((p) => p.id), ["p", "q"]);
+  assert.deepEqual(out.products[0].components[0].paths, { a: ["**"] }); // existing component keeps its paths
+  assert.equal(out.products[0].components[0].pages[0].name, "Local");
 });

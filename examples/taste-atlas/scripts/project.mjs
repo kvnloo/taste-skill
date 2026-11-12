@@ -82,7 +82,7 @@ export function build(cfg, { work, mission, asks, titles, home, now = Date.now()
       const merge = (k, n) => top(g.flatMap((x) => (x[k] ?? []).flatMap(([v, c]) => Array(c).fill(v))), n);
       const hits = mine.filter((a) => re?.test(a.text)).map((a) => ({ ...a, score: density(a.text, re) })).sort((a, b) => b.score - a.score || b.t - a.t), sess = top(hits.map((a) => a.session), 6);
       for (const pin of pins) if (re?.test(`${pin.title} ${pin.text}`)) pin.screens.push(s.id);
-      return { id: s.id, name: s.name, phase: s.phase, component: s.component, branch: !!s.branch, next: s.next ?? [], critic: s.critic ?? null,
+      return { id: s.id, name: s.name, phase: s.phase, component: s.component, branch: !!s.branch, next: s.next ?? [], critic: s.critic ?? null, brief: s.brief ?? null,
         shot: s.shot, takes: s.takes ?? [], scene: scene ? { id: scene.id, name: scene.name, state: scene.state, note: scene.note } : null,
         code: g.map(({ repo, gh, missing, files, commits }) => ({ repo, gh, missing: !!missing, files: files ?? 0, commits: commits?.length ?? 0 })),
         commits: g.flatMap((x) => (x.commits ?? []).map((c) => ({ ...c, repo: x.repo, gh: x.gh }))).sort((a, b) => b.t - a.t).slice(0, 40),
@@ -100,6 +100,9 @@ export function build(cfg, { work, mission, asks, titles, home, now = Date.now()
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const t0 = Date.now(), cfg = readJson(join(app, "scripts/project.config.json")), wcfg = readJson(join(app, "scripts/work.config.json"));
+  // Private overlays (data/*.local.json, never committed): extra projects, and the repos their screens read.
+  cfg.projects.push(...(readJson(join(app, "data/project.config.local.json"))?.projects ?? []));
+  wcfg.repos = { ...wcfg.repos, ...(readJson(join(app, "data/work.config.local.json"))?.repos ?? {}) };
   const work = readJson(join(app, "data/work.atlas.json")) ?? { repos: wcfg.repos }, mission = readJson(join(app, "data/mission.json"));
   const { asks, titles } = loadAsks(wcfg.sources?.asks);
   for (const r of Object.keys(wcfg.repos)) if (!work.repos[r]?.path) work.repos[r] = wcfg.repos[r];

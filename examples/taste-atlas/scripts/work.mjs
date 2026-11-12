@@ -229,10 +229,17 @@ export async function buildWork(cfg, io) {
     repos, ci: Object.fromEntries(Object.entries(gh).map(([k, v]) => [k, v.ci ?? null])), unmapped, errors, products, components: comps };
 }
 
-const deepPages = (cfg, local) => { // private overlay: pages (and nothing else) merge into components by id
-  for (const lp of local?.products ?? []) for (const lc of lp.components ?? []) {
-    const c = cfg.products.find((p) => p.id === lp.id)?.components.find((x) => x.id === lc.id);
-    if (c && lc.pages) c.pages = [...(c.pages ?? []), ...lc.pages];
+// Private overlay (data/work.config.local.json, never committed): pages merge into existing components by id;
+// a product the public config lacks is added whole, with the repos it needs.
+export const deepPages = (cfg, local) => {
+  cfg.repos = { ...cfg.repos, ...(local?.repos ?? {}) };
+  for (const lp of local?.products ?? []) {
+    const p = cfg.products.find((x) => x.id === lp.id);
+    if (!p) { if (lp.components?.length) cfg.products.push(lp); continue; }
+    for (const lc of lp.components ?? []) {
+      const c = p.components.find((x) => x.id === lc.id);
+      if (c && lc.pages) c.pages = [...(c.pages ?? []), ...lc.pages];
+    }
   }
   return cfg;
 };

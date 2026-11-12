@@ -203,7 +203,7 @@ export async function buildWork(cfg, io) {
       : { ...live, source: "live", checked: Math.min(...own.map((id) => compById.get(id).status.checked)), window: 6 * H };
     const ciRows = repoGh.map((r) => gh[r]?.ci && [`${r.split("/")[1]} main CI`, gh[r].ci.conclusion === "success" ? "green" : gh[r].ci.conclusion ?? "running", "live"]).filter(Boolean);
     const prsAll = repoGh.flatMap((r) => gh[r]?.prs ?? []), week = prsAll.filter((x) => x.state === "MERGED" && now - x.t < 7 * D).length;
-    products.push({ id: p.id, name: p.name, label: p.name, role: pane?.role ?? null, verdict: pane ? { text: pane.verdict, source: seedLabel, checked: seedAt } : null,
+    products.push({ id: p.id, name: p.name, label: p.name, atlas: p.atlas ?? null, role: pane?.role ?? null, verdict: pane ? { text: pane.verdict, source: seedLabel, checked: seedAt } : null,
       status, live, deadline: p.deadline ?? null, deadlineLabel: p.deadline && seed?.deadline === p.deadline ? seed.deadline_label : null, keywords: p.keywords ?? [],
       repos: [...new Set(p.components.flatMap((c) => Object.keys(c.paths ?? {})))].map((r) => repos[r]).filter(Boolean),
       weight: +weightAt(t, now, hl).toFixed(3), lastTouched: t.at(-1)?.[0] ?? null, touches: t, components: own, portals,

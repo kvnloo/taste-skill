@@ -1,12 +1,14 @@
 // Taste Atlas renderer: radial taxonomy graph + lineage card. Pure state -> DOM, so the same code
 // drives the interactive app (main.js) and deterministic film scenes (view(state) per frame).
-import { buildTree, opById, lineage, DOMAINS, TECHNIQUES } from "./taxonomy.js";
+import { buildTree, opById, lineage, DOMAINS, TECHNIQUES, LEVELS, INTRO, NOUN, MODE } from "./taxonomy.js";
 import { specimen, CARD } from "./specimens.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const RADII = [0, 320, 700, 1100, 1680];
+// Rings grow with the leaf count so a big taxonomy (the skills atlas: ~400 leaves) keeps its nodes apart.
+let RADII = [0, 320, 700, 1100, 1680];
 const MOTION = new Set(["ease", "stagger", "morph", "parallax", "ticker", "alive"]);
-export const LEVELS = ["OPERATION", "DOMAIN", "TECHNIQUE", "EXECUTION"];
+export { LEVELS };
+const STATUS = { core: "#1f8a5b", active: "#2f6fd6", scoped: "#c27c0e", dormant: "#8a857a" }; // skills atlas: a skill card's swatch
 
 export const ICONS = {
   differentiate: `<rect x="3" y="3" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="10" y="3" width="7" height="14" fill="currentColor"/>`,
@@ -32,7 +34,8 @@ export function layout() {
   const leaves = [];
   const walk = (n) => (n.children.length ? n.children.forEach(walk) : leaves.push(n));
   walk(root);
-  const gap = 1.6, total = leaves.length + gap * root.children.length;
+  const k = Math.max(1, leaves.length / 140); RADII = [0, 320 * Math.sqrt(k), 700 * Math.sqrt(k), 1100 * k, 1680 * k];
+  const gap = 1.6 * Math.max(1, leaves.length / 140), total = leaves.length + gap * root.children.length;
   let slot = gap / 2, lastOp = leaves[0].op;
   for (const l of leaves) {
     if (l.op !== lastOp) { slot += gap; lastOp = l.op; }
@@ -77,10 +80,10 @@ export function createAtlas({ svg, card, width, height }) {
       part.shape = el("circle", { r: 10 }, grp);
     } else if (n.kind === "operation") {
       part.shape = el("circle", { r: 40, "stroke-width": 2.5 }, grp);
-      part.icon = el("g", { transform: "translate(-15 -15) scale(1.5)" }, grp); part.icon.innerHTML = ICONS[n.op];
+      part.icon = el("g", { transform: "translate(-15 -15) scale(1.5)" }, grp); part.icon.innerHTML = ICONS[n.op] ?? ICONS.technique;
     } else if (n.kind === "domain") {
       part.shape = el("rect", { x: -16, y: -16, width: 32, height: 32, rx: 9, "stroke-width": 2 }, grp);
-      part.icon = el("g", { transform: "translate(-10 -10)" }, grp); part.icon.innerHTML = ICONS[n.domain];
+      part.icon = el("g", { transform: "translate(-10 -10)" }, grp); part.icon.innerHTML = ICONS[n.domain] ?? ICONS.grouping;
     } else if (n.kind === "technique") {
       part.shape = el("circle", { r: 20, "stroke-width": 2 }, grp);
       part.icon = el("g", { transform: "translate(-10 -10)" }, grp); part.icon.innerHTML = ICONS.technique;
@@ -88,7 +91,7 @@ export function createAtlas({ svg, card, width, height }) {
       const s = 0.5, w = CARD.w * s, h = CARD.h * s;
       part.frame = el("g", { transform: `translate(${-w / 2} ${-h / 2}) scale(${s})` }, grp);
       const clip = el("clipPath", { id: "clip-" + n.id }, grp); el("rect", { width: CARD.w, height: CARD.h, rx: 6 }, clip);
-      el("rect", { width: CARD.w, height: CARD.h, rx: 6, class: "swatch", fill: opById[n.op].color, opacity: 0.55 }, part.frame);
+      el("rect", { width: CARD.w, height: CARD.h, rx: 6, class: "swatch", fill: STATUS[n.status] ?? opById[n.op].color, opacity: n.status ? 0.9 : 0.55 }, part.frame);
       part.art = el("g", { "clip-path": `url(#clip-${n.id})`, class: "art" }, part.frame);
       part.art.innerHTML = specimen(n.family, n.seed, 0);
       part.shape = el("rect", { width: CARD.w, height: CARD.h, rx: 6, fill: "none", "stroke-width": 2 }, part.frame);
@@ -217,7 +220,7 @@ export function createAtlas({ svg, card, width, height }) {
     if (key === keys.card) return fade();
     keys.card = key;
     if (!f.level) {
-      card.innerHTML = `<div class="intro"><div class="eyebrow">A TAXONOMY OF TASTE</div><h1>Why an image <em>works.</em></h1><p>Every specimen is filed by what it asks the viewer to do, the property that carries it, and the named technique.</p>${LEVELS.map((L, i) => `<div class="lv"><b>0${i + 1}</b>${L}</div>`).join("")}</div>`;
+      card.innerHTML = `<div class="intro"><div class="eyebrow">${INTRO.eyebrow}</div><h1>${INTRO.h1}</h1><p>${INTRO.p}</p>${LEVELS.map((L, i) => `<div class="lv"><b>0${i + 1}</b>${L}</div>`).join("")}</div>`;
       return fade();
     }
     const op = line[0]?.op;
@@ -230,14 +233,14 @@ export function createAtlas({ svg, card, width, height }) {
       if (i === 2 && n) { ic = icon("technique"); sub = `<div class="mech">${n.mech}</div>`; }
       if (i === 3) {
         if (n) { ic = `<svg viewBox="0 0 ${CARD.w} ${CARD.h}" width="22" height="28">${specimen(n.family, n.seed, tq)}</svg>`; val = `<em>${n.name}</em>`; }
-        else if (line[2]) val = `<em>${line[2].children.length} specimens</em>`;
+        else if (line[2]) val = `<em>${line[2].children.length} ${NOUN.execution}</em>`;
       }
       return `<div class="row ${n ? "on" : ""}"><div class="ic" style="color:${c}">${ic}</div><div><div class="k"><b style="color:${c}">0${i + 1}</b> ${L}</div><div class="v ${i === 2 ? "mono" : ""}">${val}</div>${sub}</div></div>`;
     }).join("");
     const preview = line[3] ? `<div class="preview"><svg viewBox="0 0 ${CARD.w} ${CARD.h}" preserveAspectRatio="xMidYMid slice">${specimen(line[3].family, line[3].seed, tq)}</svg></div>` : "";
     // Optional layers (bookmarks) append "recorded examples" under the lineage.
     // Hand the focused branch to an agent as a build brief (handled in main.js; see src/brief.js).
-    const act = `<div class="card-act"><button data-brief="site" title="Copy a site brief for an agent">Copy site brief</button><button data-brief="component" title="Copy a UI component brief for an agent">Component brief</button></div>`;
+    const act = MODE ? "" : `<div class="card-act"><button data-brief="site" title="Copy a site brief for an agent">Copy site brief</button><button data-brief="component" title="Copy a UI component brief for an agent">Component brief</button></div>`;
     card.innerHTML = `<div class="rows">${rows}</div>${preview}${view.cardExtra?.(f) ?? ""}${act}`;
     fade();
   }

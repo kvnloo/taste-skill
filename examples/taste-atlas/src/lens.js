@@ -2,6 +2,7 @@
 // posts light up (plus two greyed neighbours per technique), and the shelf carries every resource the project has:
 // status, journey screens, inspiration, repos & PRs, components, open notes, your asks, boards and links.
 import { urlKey } from "./boardfilter.js";
+import { MODE } from "./taxonomy.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const src = (p) => (/^(https?:|\/)/.test(p) ? p : `./data/${p}`);
@@ -25,7 +26,10 @@ export async function mountLens(A, { bm, fly }) {
 
   let cur = null;
   async function show(id) {
-    const p = products.get(id); cur = p ? id : null; sel.value = cur ?? "";
+    const p = products.get(id);
+    // A project with its own atlas (work.config.json "atlas": "skills") reopens the page on that taxonomy; leaving it returns.
+    if ((p?.atlas ?? null) !== MODE) { location.href = `${location.pathname}${p?.atlas ? `?atlas=${encodeURIComponent(p.atlas)}` : ""}${p ? `#project:${encodeURIComponent(id)}` : ""}`; return; }
+    cur = p ? id : null; sel.value = cur ?? "";
     document.body.classList.toggle("lens", !!cur);
     if (!cur) { if (location.hash.startsWith("#project:")) history.replaceState(null, "", location.pathname + location.search); return bm.setCustom(null); }
     history.replaceState(null, "", `${location.pathname}${location.search}#project:${cur}`);
@@ -60,6 +64,8 @@ export async function mountLens(A, { bm, fly }) {
       sec("Your asks", asks.length, `<ul class="ln-list asks">${asks.slice(0, 6).map((a) => `<li>“${esc(a.text.slice(0, 220))}${a.text.length > 220 ? "…" : ""}”<small>${ago(a.t)} ago</small></li>`).join("")}</ul>`),
       sec("Boards & links", (J?.boards?.length ?? 0) + (p.links?.length ?? 0), `<ul class="ln-list">${(J?.boards ?? []).map((b) => `<li><a href="/s/${esc(b.id)}/">${esc(b.title)}</a><small>board · ${b.refs} refs</small></li>`).join("")}${(p.links ?? []).map(([k, u]) => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(k)}</a></li>`).join("")}</ul>`),
     ].join("");
+    // On its own atlas everything on the canvas is the project's context: nothing greys out, the shelf lists the skills.
+    if (p.atlas) { const own = bm.items.filter((b) => b.layer === "skill").sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); return bm.setCustom({ title: p.name, kind: "PROJECT", ids: null, items: own, n: own.length, html }); }
     bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n: posts.size + cards.length, html });
     const ts = [...posts.keys(), ...near].map((i) => bm.tileOf(i)).filter(Boolean);
     if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);

@@ -7,7 +7,15 @@
 // principles). Specimens are procedural (src/specimens.js); no third-party images are bundled.
 // Inspired by the idea in Jason Murray's Iris (Modern Art Direction); not a port of its data.
 
-export const OPERATIONS = [
+// Alternative atlases: ?atlas=<kind> swaps this whole taxonomy for ./data/<kind>.taxonomy.json (scripts/skills.mjs
+// writes the skills one). Same four levels and shapes, so every view, layer and lens works unchanged.
+export const MODE = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("atlas");
+const ALT = MODE ? await fetch(`./data/${MODE}.taxonomy.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+export const LEVELS = ALT?.levels ?? ["OPERATION", "DOMAIN", "TECHNIQUE", "EXECUTION"];
+export const NOUN = { operation: LEVELS[0].toLowerCase() + "s", technique: "techniques", execution: "specimens", ...ALT?.noun };
+export const INTRO = ALT?.intro ?? { eyebrow: "A TAXONOMY OF TASTE", h1: "Why an image <em>works.</em>", p: "Every specimen is filed by what it asks the viewer to do, the property that carries it, and the named technique." };
+
+const OPERATIONS0 = [
   { id: "differentiate", name: "Differentiate", color: "#d6453d", night: "#ff6b5f", ask: "make one thing stand out" },
   { id: "infer", name: "Infer", color: "#7b3fa0", night: "#c38bff", ask: "let the viewer complete the meaning" },
   { id: "group", name: "Group", color: "#2f6fd6", night: "#6ea8ff", ask: "make things read as one" },
@@ -16,7 +24,9 @@ export const OPERATIONS = [
   { id: "evoke", name: "Evoke", color: "#c2457a", night: "#ff86b8", ask: "set a mood the viewer can feel" },
 ];
 
-export const DOMAINS = {
+export const OPERATIONS = ALT?.operations ?? OPERATIONS0;
+
+const DOMAINS0 = {
   feature: { name: "Feature", icon: "feature" },
   semantic: { name: "Semantic", icon: "semantic" },
   space: { name: "Space", icon: "space" },
@@ -25,6 +35,8 @@ export const DOMAINS = {
   time: { name: "Time", icon: "time" },
   material: { name: "Material", icon: "material" },
 };
+
+export const DOMAINS = ALT?.domains ?? DOMAINS0;
 
 // [operation, domain, technique id, name, specimen family, one-line mechanism, executions[]]
 // Each execution: [title, seed]. Seeds vary palette and composition inside the family.
@@ -100,14 +112,14 @@ export const UI = {
   "alive-canvas": "Quiet chrome around one live element (shader, generative canvas, looping video) that moves by itself.",
 };
 
-export const TECHNIQUES = T.map(([op, domain, id, name, family, mech, ex]) => ({
+export const TECHNIQUES = ALT?.techniques ?? T.map(([op, domain, id, name, family, mech, ex]) => ({
   id, op, domain, name, family, mech, ui: UI[id],
   executions: ex.map(([title, seed], i) => ({ id: `${id}--${i + 1}`, title, seed, family })),
 }));
 
 // Tree used by layout and search. Domains are scoped to their operation ("differentiate/feature").
 export function buildTree() {
-  const root = { id: "root", level: 0, name: "Taste Atlas", children: [] };
+  const root = { id: "root", level: 0, name: ALT ? "Skills Atlas" : "Taste Atlas", children: [] };
   const byId = new Map([["root", root]]);
   for (const o of OPERATIONS) {
     const on = { id: o.id, level: 1, kind: "operation", name: o.name, op: o.id, parent: root, children: [] };
@@ -124,7 +136,7 @@ export function buildTree() {
     const tn = { id: t.id, level: 3, kind: "technique", name: t.name, op: t.op, domain: t.domain, mech: t.mech, parent: dn, children: [] };
     dn.children.push(tn); byId.set(tn.id, tn);
     for (const e of t.executions) {
-      const en = { id: e.id, level: 4, kind: "execution", name: e.title, op: t.op, family: e.family, seed: e.seed, parent: tn, children: [] };
+      const en = { id: e.id, level: 4, kind: "execution", name: e.title, op: t.op, family: e.family, seed: e.seed, status: e.status, parent: tn, children: [] };
       tn.children.push(en); byId.set(en.id, en);
     }
   }

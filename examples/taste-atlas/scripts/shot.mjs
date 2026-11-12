@@ -36,6 +36,40 @@ if (process.env.LENS) {
 // ONBOARD=1: the import page on a fresh data dir (run the server with an empty $ATLAS_DATA): 8 source cards, upload
 // fixture exports through the real file input (FIXTURES=<dir> of files), the import job finishes, the cards turn on,
 // and the Atlas shows each imported layer in the Layers bar. Desktop + phone screenshots.
+// SKILLS=1: picking the Skillshub project (work.config.json "atlas": "skills") reopens the atlas on the skill taxonomy
+// (scripts/skills.mjs): skill domains in the legend, the project's sections in the shelf, skill records as tiles, no
+// greyed-out canvas; picking "none" returns to the taste taxonomy.
+if (process.env.SKILLS) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], q = await b.newPage({ viewport: { width: 1440, height: 900 } });
+  q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => noisy(m) || errs.push(m.text())); http(q);
+  await q.goto(`${base}/`); await q.waitForFunction(() => window.__atlas?.lens, null, { timeout: 60000 }).catch(async (e) => { console.error("FAIL atlas did not mount", errs, await q.evaluate(() => Object.keys(window.__atlas ?? {}))); throw e; });
+  await q.selectOption("select.projpick", "skillshub"); await q.waitForURL(/atlas=skills/, { timeout: 15000 });
+  await q.waitForFunction(() => window.__atlas?.lens?.current?.() === "skillshub", null, { timeout: 60000 }).catch(async (e) => { console.error("FAIL lens did not open", q.url(), errs, await q.evaluate(() => Object.keys(window.__atlas ?? {}))); throw e; }); await q.waitForTimeout(2500);
+  const s = await q.evaluate(() => ({ stat: document.getElementById("stat").innerText, legend: document.getElementById("legend").innerText.split("\n").filter(Boolean),
+    kind: document.querySelector(".shelf header small")?.innerText, secs: [...document.querySelectorAll(".ln h4")].map((h) => h.firstChild.textContent.trim()),
+    layers: [...document.querySelectorAll(".layers [data-layer]")].map((x) => x.innerText.replace(/\n/g, " ")), tiles: window.__atlas.bm.tilesShown(), intro: document.querySelector("#card .eyebrow")?.innerText,
+    // Domain labels sit round the hub; with ~400 leaves the small domains used to pile up there.
+    clash: (() => { const L = [...document.querySelectorAll("text.l1")].filter((t) => getComputedStyle(t).display !== "none").map((t) => [t.textContent, t.getBoundingClientRect()]), h = [];
+      for (const [i, [a, r]] of L.entries()) for (const [b, c] of L.slice(i + 1)) if (r.left < c.right && c.left < r.right && r.top < c.bottom && c.top < r.bottom) h.push(a + "×" + b); return h; })() }));
+  await q.screenshot({ path: `${out}/skills-project.png` });
+  await q.evaluate(() => window.__atlas.go("j:design-taste")); await q.waitForTimeout(1500);
+  const job = await q.evaluate(() => document.getElementById("card").innerText.replace(/\n+/g, " | ").slice(0, 400));
+  await q.screenshot({ path: `${out}/skills-job.png` });
+  await q.evaluate(() => window.__atlas.go("agents")); await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/skills-domain.png` });
+  await q.selectOption("select.projpick", ""); await q.waitForURL((u) => !/atlas=/.test(u.search), { timeout: 15000 }); await q.waitForFunction(() => window.__atlas?.bm, null, { timeout: 60000 });
+  const back = await q.evaluate(() => document.getElementById("stat").innerText);
+  console.log("skills", JSON.stringify({ s, job, back }, null, 1));
+  if (!/domains .* jobs .* skills/.test(s.stat)) bad.push("stat is not the skills taxonomy: " + s.stat);
+  if (!s.legend.includes("Agents") || s.legend.includes("Differentiate")) bad.push("legend is not the skill domains");
+  if (s.kind !== "PROJECT" || !s.secs.includes("Components")) bad.push("Skillshub project shelf did not open");
+  if (!s.tiles) bad.push("no skill tiles on the canvas");
+  if (s.clash.length) bad.push("domain labels overlap: " + s.clash.join(", "));
+  if (!/Design Taste/.test(job) || !/USE CASES/.test(job)) bad.push("job card wrong: " + job);
+  if (!/operations/.test(back)) bad.push("leaving the project did not return to the taste atlas: " + back);
+  if (errs.length) bad.push(...errs);
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
+
 if (process.env.ONBOARD) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], { readdirSync } = await import("node:fs");
   const files = readdirSync(process.env.FIXTURES).map((f) => `${process.env.FIXTURES}/${f}`);

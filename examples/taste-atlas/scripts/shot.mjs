@@ -29,10 +29,12 @@ if (process.env.HISTORY) {
 }
 // MISSION=1: check /mission on the local snapshot and the public sample: in both modes no two visible nodes overlap,
 // replay fires events into the ticker, LIVE pins the clock to now, an Insights failure highlights its nodes, no errors.
+// Retro: every time window (today/week/project) lays out without overlaps, wider windows hold more chats, the ranked
+// time sinks render, and clicking the top sink highlights its chats.
 if (process.env.MISSION) {
-  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
-  for (const q of ["", "&sample=1"]) for (const mode of ["pm", "bs"]) {
-    const name = `mission-${mode}${q ? "-sample" : ""}`;
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], chats = {};
+  for (const q of ["", "&sample=1", "&span=week", "&span=project"]) for (const mode of ["pm", "bs"]) {
+    const name = `mission-${mode}${q ? `-${q === "&sample=1" ? "sample" : q.split("=")[1]}` : ""}`;
     await p.goto(`${base}/mission?mode=${mode}&theme=dark${q}`); await p.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 15000 }); await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const bs = document.documentElement.dataset.mode === "bs", ns = [...window.__mission.nodes.values()].filter((n) => n.cur.o > 0.5 && n.kind !== "axis");
@@ -41,13 +43,23 @@ if (process.env.MISSION) {
         const [ax, ay, aw, ah] = box(ns[i]), [bx, by, bw, bh] = box(ns[j]);
         if (Math.min(ax + aw, bx + bw) - Math.max(ax, bx) > 4 && Math.min(ay + ah, by + bh) - Math.max(ay, by) > 4) hits.push(`${ns[i].id} x ${ns[j].id}`);
       }
-      return { nodes: ns.length, hits, src: document.getElementById("srcbadge").textContent };
+      return { nodes: ns.length, chats: ns.filter((n) => n.kind === "session").length, hits, src: document.getElementById("srcbadge").textContent };
     });
     console.log(name, JSON.stringify({ ...r, hits: r.hits.slice(0, 5) }));
     if (r.hits.length) bad.push(`${name}: ${r.hits.length} overlapping nodes, e.g. ${r.hits[0]}`);
-    if (q && !r.src.startsWith("public sample")) bad.push(`${name}: ?sample did not load the public sample`);
+    if (q === "&sample=1" && !r.src.startsWith("public sample")) bad.push(`${name}: ?sample did not load the public sample`);
+    chats[`${mode}${q}`] = r.chats;
+    if (q.includes("span=")) { const days = await p.evaluate(() => [...document.querySelectorAll(".hours i.day:not(.tight)")].map((e) => e.getBoundingClientRect()).filter((b) => b.width && b.right > 0 && b.left < innerWidth));
+      if (mode === "pm" && days.length < 2) bad.push(`${name}: a multi-day window shows ${days.length} day labels`);
+      if (days.some((b, i) => i && b.left < days[i - 1].right)) bad.push(`${name}: day labels overlap`); }
     await p.screenshot({ path: `${out}/${name}.png` });
   }
+  if (!(chats["pm&span=project"] >= chats["pm&span=week"] && chats["pm&span=week"] >= chats.pm)) bad.push(`windows: chats today/week/project ${chats.pm}/${chats["pm&span=week"]}/${chats["pm&span=project"]} should not shrink`);
+  await p.goto(`${base}/mission?mode=pm&theme=dark&lens=1`); await p.waitForFunction(() => document.querySelectorAll("#insights .sink").length > 0, null, { timeout: 15000 });
+  const sinks = await p.evaluate(() => [...document.querySelectorAll("#insights .sink")].map((b) => b.querySelector("b").textContent + " " + b.querySelector(".what").firstChild.textContent));
+  await p.click("#insights .sink"); await p.waitForTimeout(1000);
+  const shl = await p.evaluate(() => document.querySelectorAll(".n.hl").length); if (!shl) bad.push("retro: the top time sink highlighted nothing");
+  await p.screenshot({ path: `${out}/mission-retro.png` }); console.log("retro sinks", JSON.stringify(sinks.slice(0, 4)), "highlighted", shl);
   await p.goto(`${base}/mission?mode=pm&theme=dark&t=14:00`); await p.waitForTimeout(1000);
   await p.click('[data-speed="45"]'); await p.click("#play"); await p.waitForTimeout(2000);
   const tk = await p.evaluate(() => document.querySelectorAll("#ticker .tk").length); if (!tk) bad.push("replay: no events reached the ticker");

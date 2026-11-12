@@ -67,7 +67,13 @@ for st, lst in asks.items():
                          "prs": my_prs, "start": start, "end": end, "subagent": R.random() < 0.3, "ask": f"{label}. Show me the real thing when it works.",
                          "owner_msgs": [{"t": start, "text": f"{label}."}, {"t": round((start + end) / 2, 2), "text": R.choice(["closer, but make it feel alive", "this is still a screenshot", "good, ship it", "check it in a real window"])}],
                          "tool_calls": sum(spark), "handoffs": 1 if end - start > 75 else 0, "spark": spark, "spark0": int(start // 5 * 5),
-                         "tools": [[x, R.randint(1, 30)] for x in R.sample(tools, 3)], "latest": steps[-1]["say"], "steps": steps, "msgs": R.randint(20, 240)})
+                         "tools": [[x, R.randint(1, 30)] for x in R.sample(tools, 3)], "latest": steps[-1]["say"], "steps": steps, "msgs": R.randint(20, 240),
+                         "profile": "clean", "curated": False, "continues": None})
+        # synthetic cost accounting (minutes by activity), the shape build.py derives from tool-call timings
+        L = end - start; act = round(L * R.uniform(0.35, 0.7), 1)
+        mix = {"film": {"probe": 0.12, "vision": 0.1, "encode": 0.06, "wait": 0.08}, "app": {"test": 0.12, "build": 0.08, "capture": 0.06, "ci": 0.06}}.get(st, {"shell": 0.15, "wait": 0.05})
+        sessions[-1].update({"active": act, "cost": {k: round(act * f * R.uniform(0.6, 1.4), 1) for k, f in mix.items()}, "ownerWait": round(L * R.uniform(0.1, 0.4), 1),
+                             "reorient": round(R.uniform(4, 14), 1) if sessions[-1]["handoffs"] else 0})
         events.append({"t": start, "type": "spawn", "session": sid})
         events.append({"t": round((start + end) / 2, 2), "type": "steer", "session": sid, "text": sessions[-1]["owner_msgs"][1]["text"]})
         for s_ in steps[:-1]: events.append({"t": s_["t"], "type": "progress", "session": sid, "text": s_["say"]})
@@ -81,6 +87,22 @@ for i, (vt, lab) in enumerate([(700, "Three directions side by side"), (790, "Di
     vid = f"v{i + 1}" if i < 6 else "final"; sc = R.sample([c["id"] for c in scenes], R.randint(1, 4))
     versions.append({"id": vid, "t": vt, "label": lab, "scenes": sc}); events.append({"t": vt, "type": "version", "version": vid})
     for c in sc: events.append({"t": vt, "type": "scene", "scene": c, "version": vid})
+# render passes: film chats render in chunks; most passes re-run before any new owner feedback
+renders, npass = [], 0
+for s in sessions:
+    if s["stream"] != "film": continue
+    t = s["start"] + 8
+    while t < s["end"] - 4:
+        npass += 1; reviewed = R.random() < 0.35; chunks = R.choice([1, 6])
+        for c in range(chunks):
+            d = round(0.8 / chunks * R.uniform(0.9, 1.2), 2); fr = 5280 // chunks
+            renders.append({"t": round(t, 2), "d": d, "session": s["id"], "reviewed": reviewed, "frames": fr if R.random() > 0.08 else fr // 3, "total": fr, "finished": True, "pass": npass, "concurrent": 0})
+            t += d
+        renders[-1]["finished"] = renders[-1]["frames"] == renders[-1]["total"]
+        t += R.uniform(6, 16)
+    s["renders"] = sum(1 for r in renders if r["session"] == s["id"])
+for r in renders: events.append({"t": r["t"], "type": "render", "session": r["session"], "reviewed": r["reviewed"], "d": r["d"]})
+commits = [{"repo": R.choice(["app", "site", "film"]), "h": f"{R.getrandbits(28):07x}", "t": round(R.uniform(480, NOW), 2), "s": R.choice(["fix: waveform frame drops", "feat: share sheet preview", "film: swap live take", "chore: bump deps"])} for _ in range(18)]
 events.sort(key=lambda e: e["t"])
 touch = {}
 for s in sessions:
@@ -88,7 +110,7 @@ for s in sessions:
 data = {
     "generatedAt": "2026-01-15T18:15:00", "sample": True,
     "mission": {"id": "murmur-launch", "title": "Murmur · launch day", "goal": "Ship a <90 s launch film where every shot is the real app",
-                "ask": "Make the record button feel alive, and show it in the film by four.", "deadline": DEADLINE, "now": NOW, "dayStart": DAY0,
+                "ask": "Make the record button feel alive, and show it in the film by four.", "deadline": DEADLINE, "now": NOW, "dayStart": DAY0, "epoch": "2026-01-15", "today": 0, "projectStart": DAY0,
                 "acceptance": ["Film < 90 s, beat-synced", "Every shot is the real app or a real card", "Everything shown ships", "Post + form in by 16:00", "Only sample data on screen"],
                 "acceptanceAt": [[None, 1060], [905, None], [DAY0, None], [None, 962], [None, DAY0]],
                 "milestones": [{"t": 480, "label": "Build green"}, {"t": 700, "label": "3 film directions"}, {"t": 850, "label": "Full cut"}, {"t": 960, "label": "Deadline", "hard": True}, {"t": 963, "label": "Posted"}, {"t": 1022, "label": "Edit window closes", "hard": True}],
@@ -97,7 +119,7 @@ data = {
     "ideas": [{"id": "i1", "stream": "film", "text": "Vertical 20s cut for social", "kind": "next"}, {"id": "i2", "stream": "app", "text": "Wallpaper drives the whole theme", "kind": "idea"},
               {"id": "i3", "stream": "cards", "text": "Digest = held notes collapsing into one card", "kind": "idea"}, {"id": "i4", "stream": "film", "text": "Anything the film shows must ship", "kind": "rule"},
               {"id": "i5", "stream": "site", "text": "Autoplay the film muted above the fold", "kind": "idea"}, {"id": "i6", "stream": "ship", "text": "Lead the post with the payoff shot", "kind": "next"}],
-    "versions": versions, "sessions": sessions, "prs": prs, "events": events,
+    "versions": versions, "sessions": sessions, "prs": prs, "events": events, "renders": renders, "fullCut": 5280, "commits": commits,
     "insights": {"duplicates": [{"session": d, "label": next(s["label"] for s in sessions if s["id"] == d) + " (same ask, second chat)"} for d in dup],
                  "churn": [{"scene": c, "sessions": n} for c, n in sorted(touch.items(), key=lambda x: -x[1])[:4]],
                  "recurring": [{"name": "Proved in a mock, not the real app", "count": 4, "sessions": [s["id"] for s in sessions if s["stream"] == "app"][:4], "fix": "gate: real-window capture or no merge"},

@@ -300,3 +300,62 @@ body:has(#drawer:not([hidden])) .m-hint { display: none; }
 #world:not([data-lod="near"]) .n-scene header b { font-size: calc(14px * min(var(--inv, 1), 1.9)); }
 #world:not([data-lod="near"]) .n-scene .note { display: none; }
 #world:not([data-lod="near"]) .n-version b { font-size: calc(14px * min(var(--inv, 1), 1.8)); }
+
+/* ---------- time window picker */
+.m-span { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(12px); }
+.m-span button { border: 0; background: transparent; padding: 6px 11px; border-radius: 10px; cursor: pointer; font: 600 12.5px Inter, sans-serif; color: var(--ink); }
+.m-span button.on { background: var(--gold); color: #1d1b17; }
+.m-span .dates { display: none; gap: 4px; margin-left: 4px; }
+.m-span:has([data-span="custom"].on) .dates { display: flex; }
+.m-span input { font: 500 11px "IBM Plex Mono", monospace; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; color-scheme: light dark; }
+.m-span .info { font: 500 10.5px "IBM Plex Mono", monospace; color: var(--mute); padding: 0 8px 0 6px; white-space: nowrap; }
+.hours i.day { color: var(--ink); font-weight: 600; }
+.hours i.day::before { top: -40px; height: 34px; border-left: 2px solid var(--ink); }
+
+/* ---------- render strip on the roadmap */
+.rband { fill: color-mix(in srgb, var(--gold) 5%, transparent); stroke: color-mix(in srgb, var(--gold) 30%, transparent); stroke-dasharray: 4 6; }
+.rlab { font: 700 15px "IBM Plex Mono", monospace; fill: var(--gold); letter-spacing: .08em; }
+.rlab.sub { font-weight: 500; font-size: 13px; fill: var(--risk); letter-spacing: 0; }
+.rtick.ok { fill: var(--gold); }
+.rtick.waste { fill: var(--risk); opacity: .85; }
+.rtick.hl { stroke: var(--ink); stroke-width: 3; }
+#ticks i.rnd { height: 7px; top: auto; bottom: 0; width: 2px; background: var(--gold); opacity: .8; }
+#ticks i.rnd.waste { background: var(--risk); }
+
+/* ---------- per-card cost strip (where the chat's wall time went) + render count */
+.n-session .cost { display: none; align-items: center; gap: 6px; margin-top: 8px; height: 10px; }
+.n-session .cost i { height: 8px; min-width: 2px; border-radius: 2px; }
+.n-session .cost { flex-wrap: nowrap; }
+.n-session .cost i:first-child { border-radius: 4px 2px 2px 4px; }
+.n-session .cost b { font: 600 11px "IBM Plex Mono", monospace; color: var(--mute); margin-left: 4px; flex: none; }
+.lens .n-session .cost { display: flex; gap: 1px; }
+.rbadge { position: absolute; bottom: 8px; right: 10px; font: 700 11px "IBM Plex Mono", monospace; color: var(--gold); }
+.lens .rbadge { color: #1d1b17; background: var(--gold); padding: 2px 7px; border-radius: 8px; }
+#world[data-lod="far"] .lens .n-session .cost, .lens #world[data-lod="far"] .n-session .cost { height: 22px; }
+.lens #world[data-lod="far"] .n-session .cost i { height: 20px; }
+
+/* ---------- retro panel */
+.catbar { display: flex; gap: 2px; height: 18px; border-radius: 6px; overflow: hidden; margin: 6px 0 8px; }
+.catbar i { min-width: 2px; }
+.catkey { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--mute); }
+.catkey i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.catkey b { color: var(--ink); font-weight: 600; }
+.sink { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; margin: 0 0 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; overflow: hidden; }
+.sink .bar { position: absolute; inset: 0 auto 0 0; width: var(--w); background: color-mix(in srgb, var(--risk) 9%, transparent); pointer-events: none; }
+.sink.sev-1 .bar { background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.sink.sev-0 .bar { background: color-mix(in srgb, var(--mute) 10%, transparent); }
+.sink > b { position: relative; font: 400 19px "Archivo Black", sans-serif; color: var(--risk); }
+.sink.sev-1 > b { color: var(--gold); } .sink.sev-0 > b { color: var(--mute); }
+.sink .what { position: relative; font: 600 13px Inter, sans-serif; display: grid; gap: 3px; }
+.sink em { font: 400 11.5px Inter, sans-serif; font-style: normal; color: var(--mute); line-height: 1.35; }
+.sink strong { font: 500 11px "IBM Plex Mono", monospace; color: var(--ink); opacity: .85; }
+.sink strong::before { content: "→ "; color: var(--gold); }
+.sink.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+
+/* week / project overview: day labels and midnight lines read at any zoom; hour labels drop out when far */
+#world[data-vfar="1"] .hours i:not(.day) { display: none; }
+.hours i.day { font-size: calc(14px * min(var(--invf, 1), 40)); top: calc(74px - 8px * min(var(--invf, 1), 40)); }
+.hours i.day::after { content: ""; position: absolute; left: 50%; top: 100%; height: 2100px; border-left: calc(1.5px * min(var(--invf, 1), 40)) dashed color-mix(in srgb, var(--ink) 35%, transparent); pointer-events: none; }
+.hours i.day small { display: block; font: 500 .62em "IBM Plex Mono", monospace; color: var(--mute); margin-top: .15em; white-space: nowrap; }
+.hours i.day.tight { color: transparent; }
+.hours i.day.tight small { display: none; }

@@ -68,6 +68,76 @@ if (process.env.MISSION) {
   await p.keyboard.press("i"); await p.waitForTimeout(400); await p.click("#insights .rec"); await p.waitForTimeout(900);
   const hl = await p.evaluate(() => document.querySelectorAll(".n.hl").length); if (!hl) bad.push("insights: a recurring failure highlighted nothing");
   await p.screenshot({ path: `${out}/mission-insights.png` }); console.log("replay ticker", tk, "highlighted", hl);
+  // Phones (touch, DPR 3): every state passes ux(), and each control works by touch, not only by key or mouse.
+  // ux(): no sideways scroll; every visible control on screen (or inside an on-screen scroller), >= 36px to tap
+  // (44 for standalone buttons); chrome text >= 11px; fixed surfaces never overlap; an open sheet ends above the
+  // replay bar; and the camera shows at least 3 cards.
+  const ux = (pg, tag) => pg.evaluate((tag) => {
+    const vw = innerWidth, vh = innerHeight, out = [], vis = (e) => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.opacity !== "0" ? r : null; };
+    if (document.documentElement.scrollWidth > vw + 1) out.push(`page scrolls sideways (${document.documentElement.scrollWidth}px)`);
+    const ui = [...document.querySelectorAll(".m-chrome, .m-panel:not([hidden]), .m-replay")];
+    for (const e of ui.flatMap((u) => [...u.querySelectorAll("button, a, input, [role=tab]")])) {
+      const r = vis(e); if (!r || e.closest("[hidden]")) continue; const name = (e.id ? "#" + e.id : "") + (e.textContent.trim().slice(0, 18) || e.title || e.className);
+      const sc = e.closest(".m-span, .m-panel"), box = sc ? sc.getBoundingClientRect() : { left: 0, right: vw, top: 0, bottom: vh };
+      if (!sc && (r.left < -1 || r.right > vw + 1 || r.top < -1 || r.bottom > vh + 1)) out.push(`off screen: ${name}`);
+      if (sc && (box.left < -1 || box.right > vw + 1)) out.push(`scroller off screen: ${sc.className}`);
+      if (sc && sc.matches(".m-span") && r.right > box.right + 1) out.push(`clipped in its row: ${name}`);
+      const min = e.matches(".m-pill, #play, #live, .x") ? 44 : 36; if (!e.closest(".m-panel .body, .m-panel p") && (r.height < min - 0.5 || r.width < Math.min(min, 36) - 0.5)) out.push(`tap target ${Math.round(r.width)}x${Math.round(r.height)} < ${min}: ${name}`);
+    }
+    for (const u of ui) for (const e of u.querySelectorAll("*")) { if (!e.childNodes.length || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || !vis(e)) continue;
+      const fs = parseFloat(getComputedStyle(e).fontSize); if (fs < 11) { out.push(`text ${fs}px: "${e.textContent.trim().slice(0, 24)}"`); break; } }
+    const fx = [...document.querySelectorAll(".m-chrome, .m-panel:not([hidden]), .m-replay, .m-ticker")].map((e) => [e, e === document.querySelector(".m-chrome") ? [...e.children].map(vis).filter(Boolean).reduce((a, r) => ({ top: Math.min(a.top, r.top), bottom: Math.max(a.bottom, r.bottom), left: 0, right: vw }), { top: 1e9, bottom: -1e9 }) : vis(e)]).filter(([, r]) => r && r.bottom > r.top);
+    for (let i = 0; i < fx.length; i++) for (let j = i + 1; j < fx.length; j++) { const [a, ra] = fx[i], [b, rb] = fx[j];
+      if (Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top) > 1 && Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left) > 1) out.push(`overlap: ${a.className.split(" ")[0]} x ${b.className.split(" ")[0]}`); }
+    const cards = [...document.querySelectorAll("#nodes .n")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && r.width > 20; }).length;
+    if (cards < 3) out.push(`camera shows ${cards} cards`);
+    // legible: on a single-day view at least 3 on-screen chat titles render >= 9px tall on the glass
+    if (!document.querySelector('[data-span="today"].on') || document.querySelector(".m-panel:not([hidden])")) return out.map((m) => `${tag}: ${m}`);
+    const k = window.__mission.S.cam.k, legible = [...document.querySelectorAll("#nodes .n-session h3")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && parseFloat(getComputedStyle(e).fontSize) * k >= 9; }).length;
+    if (document.documentElement.dataset.mode === "bs") { const g = document.querySelector("#nodes .n-goal"), r = g?.getBoundingClientRect(), h1 = g?.querySelector("h1");
+      if (!r || r.left < -1 || r.right > vw + 1) out.push("the goal (brainstorm sun) is cropped"); else if (parseFloat(getComputedStyle(h1).fontSize) * k < 16) out.push(`goal title renders ${(parseFloat(getComputedStyle(h1).fontSize) * k).toFixed(1)}px`); }
+    else if (legible < 3) out.push(`only ${legible} chat titles are legible (zoom ${k.toFixed(2)})`);
+    return out.map((m) => `${tag}: ${m}`);
+  }, tag);
+  for (const [w, h] of [[390, 844], [360, 800]]) {
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }); const q = await ctx.newPage(), tag = `phone${w}`;
+    q.on("pageerror", (e) => errs.push(`${tag}: ${e}`)); q.on("console", (m) => m.type() === "error" && errs.push(`${tag}: ${m.text()}`));
+    const tap = (sel) => q.tap(sel, { timeout: 3000 }).then(() => true, (e) => (bad.push(`${tag}: cannot tap ${sel}: ${/outside of the viewport/.test(e.message) ? "off screen" : e.message.split("\n")[0]}`), false));
+    const check = async (t) => bad.push(...(await ux(q, `${tag} ${t}`)));
+    const shot = async (t) => { const c = await ctx.newCDPSession(q); const x = await c.send("Page.captureScreenshot", { format: "png" }); (await import("node:fs")).writeFileSync(`${out}/mission-${tag}-${t}.png`, Buffer.from(x.data, "base64")); await c.detach(); };
+    await q.goto(`${base}/mission?mode=pm`); await q.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 30000 }); await q.waitForTimeout(1500);
+    await check("load"); await shot("pm");
+    await tap('[data-mode="bs"]'); await q.waitForTimeout(900); if ((await q.evaluate(() => document.documentElement.dataset.mode)) !== "bs") bad.push(`${tag}: tapping Brainstorm did not switch mode`); await check("bs"); await shot("bs");
+    await tap('[data-mode="pm"]'); await q.waitForTimeout(600);
+    await tap('[data-span="week"]'); await q.waitForTimeout(1500); if (!(await q.evaluate(() => document.querySelector('[data-span="week"]').classList.contains("on")))) bad.push(`${tag}: tapping Week did nothing`); await check("week"); await shot("week");
+    await tap('[data-span="today"]'); await q.waitForTimeout(1200);
+    await tap("#lens"); await q.waitForTimeout(700); if (await q.evaluate(() => document.getElementById("insights").hidden)) bad.push(`${tag}: tapping Retro opened nothing`);
+    await check("retro"); await shot("retro");
+    const sink = q.locator("#insights .sink").first(); await sink.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {}); await sink.tap({ timeout: 3000 }).catch(() => bad.push(`${tag}: cannot tap a time sink`)); await q.waitForTimeout(900);
+    await q.waitForTimeout(500); // the camera flies to the highlighted chats; at least one must be on screen and not under the sheet
+    const seen = await q.evaluate(() => [...document.querySelectorAll(".n.hl")].filter((e) => { const r = e.getBoundingClientRect(), x = r.left + Math.min(r.width / 2, 40), y = r.top + Math.min(r.height / 2, 20); return x > 0 && x < innerWidth && y > 0 && y < innerHeight && document.elementFromPoint(x, y)?.closest(".n") === e; }).length);
+    if (!(await q.evaluate(() => document.querySelectorAll(".n.hl").length))) bad.push(`${tag}: tapping a time sink highlighted nothing`); else if (!seen) bad.push(`${tag}: the sink's chats are highlighted but hidden (off screen or under the sheet)`);
+    await shot("sink");
+    await tap("#insights"); await q.waitForTimeout(400); if (await q.evaluate(() => document.getElementById("insights").classList.contains("peek"))) bad.push(`${tag}: the folded retro sheet does not reopen on tap`);
+    if (!(await q.evaluate(() => { const s = document.getElementById("insights"); return s.scrollHeight <= s.clientHeight || getComputedStyle(s).overflowY !== "visible"; }))) bad.push(`${tag}: retro sheet cannot scroll`);
+    await tap("#lens"); await q.waitForTimeout(500); if (!(await q.evaluate(() => document.getElementById("insights").hidden))) bad.push(`${tag}: Retro does not close by touch`);
+    // the lowest tappable chat card: the worst case, since the sheet rises over it
+    const hit = await q.evaluate(() => { let best = null; for (const e of document.querySelectorAll("#nodes .n-session")) { const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 30); if (x > 10 && x < innerWidth - 10 && y > 120 && y < innerHeight - 100 && document.elementFromPoint(x, y)?.closest(".n") === e && (!best || y > best[1])) best = [x, y]; } return best; });
+    if (!hit) bad.push(`${tag}: no chat card is tappable on the first screen`); else {
+      await q.touchscreen.tap(hit[0], hit[1]); await q.waitForTimeout(900);
+      if (await q.evaluate(() => document.getElementById("drawer").hidden)) bad.push(`${tag}: tapping a chat card opened no drawer`); else { await q.waitForTimeout(500); await check("drawer"); await shot("drawer");
+        if (!(await q.evaluate(() => { const e = document.querySelector(".n.sel"), r = e?.getBoundingClientRect(); if (!r) return false; const x = r.left + Math.min(r.width / 2, 40), y = r.top + Math.min(r.height / 2, 24); return x > 0 && x < innerWidth && y > 0 && document.elementFromPoint(x, y)?.closest(".n") === e; }))) bad.push(`${tag}: the open drawer hides the card that was tapped`); await tap("#drawer .x").catch(() => bad.push(`${tag}: drawer has no tappable close`)); await q.waitForTimeout(500); }
+    }
+    const c = await ctx.newCDPSession(q), cam = () => q.evaluate(() => ({ ...window.__mission.S.cam })), t = (type, pts) => c.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const k0 = await cam(); await t("touchStart", [[w / 2 - 30, h / 2], [w / 2 + 30, h / 2]]); for (let i = 1; i <= 6; i++) await t("touchMove", [[w / 2 - 30 - i * 15, h / 2], [w / 2 + 30 + i * 15, h / 2]]); await t("touchEnd", []);
+    const k1 = await cam(); if (!(k1.k > k0.k * 1.5)) bad.push(`${tag}: pinch-out did not zoom (k ${k0.k.toFixed(3)} -> ${k1.k.toFixed(3)})`);
+    await t("touchStart", [[w / 2, h / 2]]); for (let i = 1; i <= 6; i++) await t("touchMove", [[w / 2 + i * 20, h / 2 + i * 10]]); await t("touchEnd", []);
+    const k2 = await cam(); if (Math.abs(k2.x - k1.x) < 60) bad.push(`${tag}: one-finger drag did not pan`); if (!(await q.evaluate(() => document.getElementById("drawer").hidden))) bad.push(`${tag}: a pan opened the drawer`);
+    const sb = await q.locator("#scrub").boundingBox(), clk = () => q.evaluate(() => document.getElementById("clock").textContent), c0 = await clk();
+    await q.touchscreen.tap(sb.x + sb.width * 0.3, sb.y + sb.height / 2); await q.waitForTimeout(500); if ((await clk()) === c0) bad.push(`${tag}: tapping the scrubber did not move the clock`);
+    console.log(tag, "pinch", k0.k.toFixed(3), "->", k1.k.toFixed(3), "pan", Math.round(k2.x - k1.x), "clock", c0, "->", await clk());
+    await ctx.close();
+  }
   if (errs.length) bad.push(...errs.slice(0, 5));
   await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
 }

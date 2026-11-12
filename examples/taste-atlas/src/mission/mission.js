@@ -337,40 +337,67 @@ function camFor(b, pad = 80) {
 }
 function fit(anim = true) { const c = camFor(bounds()); anim ? flyTo(c) : ((S.cam = c), applyCam()); }
 // home: Product opens on the afternoon push (legible cards), Brainstorm on the whole map; f still fits everything
+// phone: never open below a legible zoom (titles >= ~10px); Product keeps the newest work in view, Brainstorm the sun
+const PHONE_K = 0.3, phone = () => innerWidth <= 760;
 function home(anim = true) {
-  if (S.mode !== "pm") return fit(anim);
-  // one day opens on the latest push (legible cards); a multi-day window on all of it (day labels, lanes, render strip)
-  const x0 = X(WIN.a), xr = X(WIN.b) - x0 + 240, b = { x0: WIN.multi ? -440 : Math.max(-440, xr - 3200), x1: xr, y0: -150, y1: 1820 };
-  const c = camFor(b, 40); anim ? flyTo(c) : ((S.cam = c), applyCam());
+  let c;
+  if (S.mode !== "pm") {
+    c = camFor(bounds()); const g = nodes.get("goal");
+    if (phone() && g) { const p = g.pos[S.mode], h = (g.h ??= g.el.offsetHeight), k = Math.min(0.5, (innerWidth - 32) / p.w); c = { k, x: innerWidth / 2 - (p.x + p.w / 2) * k, y: 130 + (innerHeight - 220) / 2 - (p.y + h / 2) * k }; }
+  }
+  else {
+    // one day opens on the latest push (legible cards); a multi-day window on all of it (day labels, lanes, render strip)
+    const x0 = X(WIN.a), xr = X(WIN.b) - x0 + 240, b = { x0: WIN.multi ? -440 : Math.max(-440, xr - 3200), x1: xr, y0: -150, y1: 1820 };
+    c = camFor(b, 40);
+    if (phone() && !WIN.multi && c.k < PHONE_K) c = { k: PHONE_K, x: innerWidth - 16 - xr * PHONE_K, y: 128 - b.y0 * PHONE_K };
+  }
+  anim ? flyTo(c) : ((S.cam = c), applyCam());
 }
 function focusNode(id, zoom = 0.9) {
   const n = nodes.get(id); if (!n) return;
   const w = n.cur.w, h = n.el.offsetHeight;
-  flyTo({ k: zoom, x: innerWidth / 2 - (n.cur.x + w / 2) * zoom - (S.sel ? 180 : 0), y: innerHeight / 2 - (n.cur.y + h / 2) * zoom });
+  // the open drawer is a side panel on desktop and a bottom sheet on phones: centre the card in what's left
+  const sheet = $("#drawer:not([hidden])")?.getBoundingClientRect().top ?? innerHeight, dx = S.sel && !phone() ? 180 : 0, cy = S.sel && phone() ? (132 + sheet) / 2 : innerHeight / 2;
+  if (S.sel && phone()) zoom = Math.min(zoom, (sheet - 132 - 16) / h, (innerWidth - 24) / w);
+  flyTo({ k: zoom, x: innerWidth / 2 - (n.cur.x + w / 2) * zoom - dx, y: cy - (n.cur.y + h / 2) * zoom });
 }
 
-// pan / zoom
-let drag = null;
+// pan / zoom (one pointer pans, two pointers pinch-zoom about their midpoint)
+let drag = null, pinch = null;
+const touches = new Map();
+const zoomAt = (cx, cy, k) => { k = clamp(k, 0.04, 2.5); const r = k / S.cam.k; S.cam.x = cx - (cx - S.cam.x) * r; S.cam.y = cy - (cy - S.cam.y) * r; S.cam.k = k; applyCam(); };
+const pinchState = () => { const [a, b] = [...touches.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
 stage.addEventListener("pointerdown", (e) => {
   if (e.target.closest("a, button, video, .n-film")) return;
-  drag = { x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y, moved: false, node: e.target.closest(".n") };
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   stage.setPointerCapture(e.pointerId);
+  if (touches.size === 2) { cancelAnimationFrame(flight); pinch = { ...pinchState(), k: S.cam.k }; if (drag) drag.moved = true; return; }
+  drag = { x: e.clientX, y: e.clientY, cx: S.cam.x, cy: S.cam.y, moved: false, node: e.target.closest(".n") };
 });
 stage.addEventListener("pointermove", (e) => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && touches.size === 2) {
+    const p = pinchState(); S.cam.x += p.mx - pinch.mx; S.cam.y += p.my - pinch.my;
+    zoomAt(p.mx, p.my, pinch.k * p.d / pinch.d); pinch.mx = p.mx; pinch.my = p.my; stage.classList.add("panning"); return;
+  }
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  if (Math.hypot(dx, dy) > 4) drag.moved = true;
+  if (Math.hypot(dx, dy) > (e.pointerType === "touch" ? 8 : 4)) drag.moved = true;
   if (drag.moved) { S.cam.x = drag.cx + dx; S.cam.y = drag.cy + dy; applyCam(); stage.classList.add("panning"); }
 });
-stage.addEventListener("pointerup", (e) => {
+const release = (e) => {
+  touches.delete(e.pointerId);
+  if (pinch) { if (touches.size < 2) pinch = null; if (!touches.size) { drag = null; stage.classList.remove("panning"); } else { const [q] = touches.values(); drag = { x: q.x, y: q.y, cx: S.cam.x, cy: S.cam.y, moved: true }; } return; }
   stage.classList.remove("panning");
-  if (drag && !drag.moved) { const n = drag.node; if (n) select(n.dataset.id); else select(null); }
+  if (e.type === "pointerup" && drag && !drag.moved) { const n = drag.node; if (n) { select(n.dataset.id); if (phone() && n.getBoundingClientRect().top + 40 > $("#drawer").getBoundingClientRect().top) focusNode(n.dataset.id, Math.max(S.cam.k, 0.5)); } else select(null); }
   drag = null;
-});
+};
+stage.addEventListener("pointerup", release);
+stage.addEventListener("pointercancel", release);
 stage.addEventListener("wheel", (e) => {
   e.preventDefault(); cancelAnimationFrame(flight);
-  const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)), k = clamp(S.cam.k * f, 0.04, 2.5), r = k / S.cam.k;
-  S.cam.x = e.clientX - (e.clientX - S.cam.x) * r; S.cam.y = e.clientY - (e.clientY - S.cam.y) * r; S.cam.k = k; applyCam();
+  zoomAt(e.clientX, e.clientY, S.cam.k * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)));
 }, { passive: false });
 
 // ---------- wires (SVG in world space)
@@ -660,7 +687,9 @@ function renderInsights() {
     ${(I.churn ?? []).length ? "<section><h4>Scene churn</h4>" : "<section hidden>"}${(I.churn ?? []).map((c) => { const sc = SCENE.get(c.scene); return `<button class="sesrow" data-go="${c.scene}"><img src="${sc.thumb}" alt="">${c.scene.replace("s", "S")} ${esc(sc.name)}<em>${c.sessions} chats · ${sc.state}</em></button>`; }).join("")}</section>
     <section><h4>Context rot</h4><p class="dim">Chats that hit the context cap and were handed off: long chats lose the thread.</p>${(I.rot ?? []).map((r) => { const s = SES.get(r.session); return s ? `<button class="sesrow" data-go="${s.id}"><i style="background:${col(s.stream)}"></i>${esc(s.label)}<em>${r.msgs} msgs · ${"●".repeat(r.handoffs)}</em></button>` : ""; }).join("")}</section>
     ${(I.patterns ?? []).length ? `<section><h4>Patterns</h4>${I.patterns.map((x) => `<p class="pat">${esc(x)}</p>`).join("")}</section>` : ""}`;
-  p.querySelectorAll("[data-sink]").forEach((b) => (b.onclick = () => { const k = R.sinks[+b.dataset.sink]; $$(".sink.on").forEach((x) => x.classList.remove("on")); b.classList.add("on"); highlight(k.sessions); }));
+  p.querySelectorAll("[data-sink]").forEach((b) => (b.onclick = () => { const k = R.sinks[+b.dataset.sink]; $$(".sink.on").forEach((x) => x.classList.remove("on")); b.classList.add("on"); if (phone()) { p.classList.add("peek"); p.scrollTop = b.offsetTop - 12; } highlight(k.sessions); }));
+  // phone: a picked sink folds the sheet to a peek so its chats show above it; tapping the peek unfolds it
+  p._peek ||= (p.addEventListener("click", (e) => { if (p.classList.contains("peek")) { p.classList.remove("peek"); e.stopPropagation(); } }, { capture: true }), true);
   p.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => { select(b.dataset.go); focusNode(b.dataset.go, 0.7); }));
   p.querySelectorAll("[data-rec]").forEach((b) => (b.onclick = () => {
     const r = I.recurring[+b.dataset.rec], ids = [...(r.sessions ?? []), ...(r.scenes ?? []), ...D.sessions.filter((s) => r.prs?.some((x) => s.prs.includes(x))).map((s) => s.id)];
@@ -671,7 +700,10 @@ function highlight(ids) {
   $$(".n.hl").forEach((e) => e.classList.remove("hl")); ids.forEach((id) => nodes.get(id)?.el.classList.add("hl"));
   S.retroHl = new Set(ids); drawWires();
   const bs = ids.map((id) => nodes.get(id)).filter((n) => n && n.cur.o > 0.5);
-  if (bs.length) { const b = { x0: Math.min(...bs.map((n) => n.cur.x)), y0: Math.min(...bs.map((n) => n.cur.y)), x1: Math.max(...bs.map((n) => n.cur.x + n.cur.w)), y1: Math.max(...bs.map((n) => n.cur.y + 190)) }; flyTo(camFor(b, 160)); }
+  if (bs.length) { const b = { x0: Math.min(...bs.map((n) => n.cur.x)), y0: Math.min(...bs.map((n) => n.cur.y)), x1: Math.max(...bs.map((n) => n.cur.x + n.cur.w)), y1: Math.max(...bs.map((n) => n.cur.y + 190)) };
+    if (!phone()) flyTo(camFor(b, 160));
+    else { const top = 132, bot = innerHeight - (($("#insights:not([hidden])")?.getBoundingClientRect().top) ?? innerHeight - 90) + 12, k = clamp(Math.min((innerWidth - 32) / (b.x1 - b.x0), (innerHeight - top - bot) / (b.y1 - b.y0)), 0.04, 0.9);
+      flyTo({ k, x: innerWidth / 2 - ((b.x0 + b.x1) / 2) * k, y: top + (innerHeight - top - bot) / 2 - ((b.y0 + b.y1) / 2) * k }); } }
 }
 // wall-clock minutes (inside the window) with at least one chat open: the union of chat spans
 function wallOf(SS) {

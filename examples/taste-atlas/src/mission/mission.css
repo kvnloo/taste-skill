@@ -271,14 +271,6 @@ u { text-decoration: none; color: var(--ink); background: linear-gradient(transp
 .m-hint { position: fixed; z-index: 8; right: 16px; bottom: 164px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--mute); }
 body:has(#drawer:not([hidden])) .m-hint { display: none; }
 
-@media (max-width: 760px) {
-  .m-seg button i, .m-src, #follow, .m-hint, .m-speed { display: none; }
-  .m-panel { left: 8px !important; right: 8px !important; width: auto; top: auto; bottom: 90px; max-height: 60vh; }
-  .m-replay { left: 8px; right: 8px; bottom: 8px; }
-  .m-clock { width: 82px; } .m-clock span { display: none; }
-  .m-mini { display: none; }
-  .m-ticker { width: auto; right: 8px; left: 8px; }
-}
 
 /* mid zoom: titles carry the card; quote and body come back near */
 #world[data-lod="mid"] .n-session h3 { font-size: calc(15.5px * min(var(--inv, 1), 1.75)); line-height: 1.1; }
@@ -359,3 +351,31 @@ body:has(#drawer:not([hidden])) .m-hint { display: none; }
 .hours i.day small { display: block; font: 500 .62em "IBM Plex Mono", monospace; color: var(--mute); margin-top: .15em; white-space: nowrap; }
 .hours i.day.tight { color: transparent; }
 .hours i.day.tight small { display: none; }
+
+/* phone: two chrome rows (brand · mode · retro · theme / window picker), panels become bottom sheets under them */
+@media (max-width: 760px) {
+  .m-seg button i, .m-src, #follow, .m-hint, .m-speed, .m-spacer, .m-chrome .views, .brand .bn { display: none; }
+  .m-chrome { top: max(8px, env(safe-area-inset-top)); left: 8px; right: 8px; flex-wrap: wrap; gap: 6px; }
+  .brand { padding: 0 12px; min-height: 44px; }
+  .m-seg { flex: 1; min-width: 0; } .m-seg button { flex: 1; justify-content: center; text-align: center; min-height: 36px; padding: 6px 8px; }
+  .m-seg button b { font-size: 13px; }
+  .m-pill { min-height: 44px; } .m-pill.icon { width: 44px; }
+  .m-span { order: 9; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; row-gap: 0; }
+  .m-span button { flex: 1 0 auto; min-height: 36px; font-size: 13px; }
+  .m-span .info { flex-basis: 100%; text-align: center; font-size: 11px; padding: 1px 0 3px; }
+  .m-span:has([data-span="custom"].on) .info { display: none; }
+  .m-panel { left: 8px !important; right: 8px !important; width: auto; top: auto; bottom: calc(82px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 210px); padding: 16px 16px 20px; }
+  .m-panel.right { bottom: calc(82px + env(safe-area-inset-bottom)); max-height: 58dvh; } /* the tapped card stays visible above */
+  .m-panel h2 { font-size: 24px; }
+  .m-panel h4, .kicker, .m-panel :is(.kpis span, .waste span, .out, .st, .rec em, .sesrow em, .sc i, .by span, .rot, .catkey) { font-size: 11px; }
+  .m-panel .x { width: 44px; height: 44px; }
+  .m-panel.peek { max-height: 132px; overflow: hidden; cursor: pointer; }
+  .m-panel.peek::after { content: "tap to open retro"; position: absolute; right: 14px; bottom: 6px; font: 500 11px "IBM Plex Mono", monospace; color: var(--mute); }
+  .m-replay { left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); height: 62px; gap: 8px; padding: 7px 8px; }
+  .m-play { width: 44px; height: 44px; }
+  .m-clock { width: 64px; } .m-clock b { font-size: 21px; } .m-clock span { display: none; }
+  .m-live { min-height: 44px; }
+  .m-mini { display: none; }
+  .m-ticker, .lens ~ .m-ticker, body:has(#insights:not([hidden])) .m-ticker { width: auto; right: 8px; left: 8px; bottom: 82px; }
+  body:has(.m-panel:not([hidden])) .m-ticker { display: none; }
+}

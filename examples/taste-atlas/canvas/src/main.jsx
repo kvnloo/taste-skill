@@ -44,8 +44,10 @@ function App() {
     }).catch((e) => setStatus(`error: ${e.message}`));
     fetch(api("/board.json")).then((r) => (r.ok ? r.json() : null)).then((b) => b?.title && setTitle(b.title)).catch(() => {});
   }, []);
-  useEffect(() => { if (x && init) { fillPictures(x, init.elements, files.current); // Open on Inspo and Kept (the frames the owner sorts between) at a readable zoom; the rest is a scroll away.
-      requestAnimationFrame(() => { const f = x.getSceneElements().filter((e) => e.id === "frame-inspo" || e.id === "frame-kept"); x.scrollToContent(f.length ? f : undefined, { fitToViewport: true, viewportZoomFactor: 0.95 }); }); } if (x) window.tasteCanvas = x; }, [x, init]);  // window.tasteCanvas: the Excalidraw API, for agents and tests
+  useEffect(() => { if (x && init) { fillPictures(x, init.elements, files.current); // Open where the scene says home is (frames with customData.home, e.g. an agent-built journey map),
+      // else on Inspo and Kept (the frames the owner sorts between), at a readable zoom; the rest is a scroll away.
+      requestAnimationFrame(() => { const els = x.getSceneElements(), home = els.filter((e) => e.type === "frame" && e.customData?.home);
+        const f = home.length ? home : els.filter((e) => e.id === "frame-inspo" || e.id === "frame-kept"); x.scrollToContent(f.length ? f : undefined, { fitToViewport: true, viewportZoomFactor: 0.95 }); }); } if (x) window.tasteCanvas = x; }, [x, init]);  // window.tasteCanvas: the Excalidraw API, for agents and tests
 
   // Debounced, and it saves the scene as it is when the timer fires: a save queued before an import or an
   // engine switch must not write the older scene back over it.

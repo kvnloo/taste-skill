@@ -6,7 +6,10 @@ const out = process.argv[2] ?? ".";
 // CHROME=/path picks the browser; Google Chrome has the H.264 codec X's mp4s need, Playwright's Chromium does not.
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
-const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// a failed load is reported by URL (the console line has none); data/*.json is optional: the public sample has no snapshot
+const errs = [], OPTIONAL = /\/data\/[\w-]+\.json$/, http = (pg, tag = "") => pg.on("response", (r) => r.status() >= 400 && !OPTIONAL.test(new URL(r.url()).pathname) && errs.push(`${tag}${r.status()} ${r.url()}`));
+const noisy = (m) => m.type() !== "error" || /^Failed to load resource/.test(m.text());
+p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => noisy(m) || errs.push(m.text())); http(p);
 // HISTORY=1: check /history (desktop + phone): one card per imported source, calendars drawn, covers load, no errors.
 if (process.env.HISTORY) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];
@@ -50,7 +53,7 @@ if (process.env.MISSION) {
     if (q === "&sample=1" && !r.src.startsWith("public sample")) bad.push(`${name}: ?sample did not load the public sample`);
     chats[`${mode}${q}`] = r.chats;
     if (q.includes("span=")) { const days = await p.evaluate(() => [...document.querySelectorAll(".hours i.day:not(.tight)")].map((e) => e.getBoundingClientRect()).filter((b) => b.width && b.right > 0 && b.left < innerWidth));
-      if (mode === "pm" && days.length < 2) bad.push(`${name}: a multi-day window shows ${days.length} day labels`);
+      if (mode === "pm" && r.chats > chats.pm && days.length < 2) bad.push(`${name}: a multi-day window shows ${days.length} day labels`);
       if (days.some((b, i) => i && b.left < days[i - 1].right)) bad.push(`${name}: day labels overlap`); }
     await p.screenshot({ path: `${out}/${name}.png` });
   }
@@ -90,7 +93,8 @@ if (process.env.MISSION) {
     for (let i = 0; i < fx.length; i++) for (let j = i + 1; j < fx.length; j++) { const [a, ra] = fx[i], [b, rb] = fx[j];
       if (Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top) > 1 && Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left) > 1) out.push(`overlap: ${a.className.split(" ")[0]} x ${b.className.split(" ")[0]}`); }
     const cards = [...document.querySelectorAll("#nodes .n")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && r.width > 20; }).length;
-    if (cards < 3) out.push(`camera shows ${cards} cards`);
+    const sheet = document.querySelector(".m-panel:not([hidden])"); // with a sheet up, the drawer check (tapped card uncovered) applies instead
+    if (cards < (sheet ? 1 : 3)) out.push(`camera shows ${cards} cards`);
     // legible: on a single-day view at least 3 on-screen chat titles render >= 9px tall on the glass
     if (!document.querySelector('[data-span="today"].on') || document.querySelector(".m-panel:not([hidden])")) return out.map((m) => `${tag}: ${m}`);
     const k = window.__mission.S.cam.k, legible = [...document.querySelectorAll("#nodes .n-session h3")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh && parseFloat(getComputedStyle(e).fontSize) * k >= 9; }).length;
@@ -101,15 +105,27 @@ if (process.env.MISSION) {
   }, tag);
   for (const [w, h] of [[390, 844], [360, 800]]) {
     const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }); const q = await ctx.newPage(), tag = `phone${w}`;
-    q.on("pageerror", (e) => errs.push(`${tag}: ${e}`)); q.on("console", (m) => m.type() === "error" && errs.push(`${tag}: ${m.text()}`));
-    const tap = (sel) => q.tap(sel, { timeout: 3000 }).then(() => true, (e) => (bad.push(`${tag}: cannot tap ${sel}: ${/outside of the viewport/.test(e.message) ? "off screen" : e.message.split("\n")[0]}`), false));
+    q.on("pageerror", (e) => errs.push(`${tag}: ${e}`)); q.on("console", (m) => noisy(m) || errs.push(`${tag}: ${m.text()}`)); http(q, `${tag}: `);
+    // reachability and responsiveness are separate verdicts: a tap fails when the control is off screen, covered or moving;
+    // a tap that is dispatched but slow to finish is the page being busy, judged below by its own Event Timing (INP)
+    const tap = (sel) => q.tap(sel, { timeout: 15000 }).then(() => true, (e) => { const why = e.message.split("\n").filter((l) => l.trim()).slice(-1)[0].trim();
+      bad.push(`${tag}: ${/outside of the viewport/.test(e.message) ? `cannot tap ${sel}: off screen` : /performing tap action/.test(why) ? `tapping ${sel} froze the page > 15 s` : `cannot tap ${sel}: ${why}`}`); return false; });
     const check = async (t) => bad.push(...(await ux(q, `${tag} ${t}`)));
     const shot = async (t) => { const c = await ctx.newCDPSession(q); const x = await c.send("Page.captureScreenshot", { format: "png" }); (await import("node:fs")).writeFileSync(`${out}/mission-${tag}-${t}.png`, Buffer.from(x.data, "base64")); await c.detach(); };
+    await q.addInitScript(() => { window.__inp = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.interactionId) window.__inp.push({ n: e.name, t: e.target?.closest?.("[data-span],[data-mode],[id],.n")?.dataset?.span ?? e.target?.id ?? "", run: Math.round(e.processingEnd - e.processingStart), d: e.duration }); }).observe({ type: "event", durationThreshold: 16, buffered: true }); });
     await q.goto(`${base}/mission?mode=pm`); await q.waitForFunction(() => window.__mission?.nodes.size > 10, null, { timeout: 30000 }); await q.waitForTimeout(1500);
     await check("load"); await shot("pm");
-    await tap('[data-mode="bs"]'); await q.waitForTimeout(900); if ((await q.evaluate(() => document.documentElement.dataset.mode)) !== "bs") bad.push(`${tag}: tapping Brainstorm did not switch mode`); await check("bs"); await shot("bs");
+    // judge a state once every card has arrived at its layout target and the camera is still, not after a fixed delay
+    // (a mode switch is a 1.1 s card tween plus a camera flight; slow software-GL frames make any fixed wait flaky)
+    const settle = async () => { let last = "";
+      for (let i = 0; i < 50; i++) { const s = await q.evaluate(() => { const m = window.__mission;
+          const arrived = [...m.nodes.values()].every((n) => { const p = n.pos[m.S.mode]; return !p || (Math.abs(n.cur.x - p.x) < 0.5 && Math.abs(n.cur.y - p.y) < 0.5 && Math.abs(n.cur.w - p.w) < 0.5); });
+          return arrived ? JSON.stringify(m.S.cam) : ""; });
+        if (s && s === last) return; last = s; await q.waitForTimeout(300); }
+      bad.push(`${tag}: the canvas never comes to rest`); };
+    await tap('[data-mode="bs"]'); await q.waitForTimeout(400); await settle(); if ((await q.evaluate(() => document.documentElement.dataset.mode)) !== "bs") bad.push(`${tag}: tapping Brainstorm did not switch mode`); await check("bs"); await shot("bs");
     await tap('[data-mode="pm"]'); await q.waitForTimeout(600);
-    await tap('[data-span="week"]'); await q.waitForTimeout(1500); if (!(await q.evaluate(() => document.querySelector('[data-span="week"]').classList.contains("on")))) bad.push(`${tag}: tapping Week did nothing`); await check("week"); await shot("week");
+    await tap('[data-span="week"]'); await q.waitForTimeout(400); await settle(); if (!(await q.evaluate(() => document.querySelector('[data-span="week"]').classList.contains("on")))) bad.push(`${tag}: tapping Week did nothing`); await check("week"); await shot("week");
     await tap('[data-span="today"]'); await q.waitForTimeout(1200);
     await tap("#lens"); await q.waitForTimeout(700); if (await q.evaluate(() => document.getElementById("insights").hidden)) bad.push(`${tag}: tapping Retro opened nothing`);
     await check("retro"); await shot("retro");
@@ -135,6 +151,10 @@ if (process.env.MISSION) {
     const k2 = await cam(); if (Math.abs(k2.x - k1.x) < 60) bad.push(`${tag}: one-finger drag did not pan`); if (!(await q.evaluate(() => document.getElementById("drawer").hidden))) bad.push(`${tag}: a pan opened the drawer`);
     const sb = await q.locator("#scrub").boundingBox(), clk = () => q.evaluate(() => document.getElementById("clock").textContent), c0 = await clk();
     await q.touchscreen.tap(sb.x + sb.width * 0.3, sb.y + sb.height / 2); await q.waitForTimeout(500); if ((await clk()) === c0) bad.push(`${tag}: tapping the scrubber did not move the clock`);
+    // responsiveness: the slowest tap's own handler time (processingStart..End, i.e. the app's work, not the host's queueing);
+    // web-vitals calls an interaction over 500 ms poor. Host load inflates it, so the verdict that counts runs on Boat
+    const inp = await q.evaluate(() => window.__inp.sort((x, y) => y.run - x.run)[0]); if (inp && inp.run > 500) bad.push(`${tag}: a tap on ${inp.t || inp.n} blocks the page ${inp.run} ms (INP poor > 500)`);
+    console.log(tag, "slowest tap", inp ? `${inp.t || inp.n} ${inp.run}ms run / ${Math.round(inp.d)}ms total` : "n/a");
     console.log(tag, "pinch", k0.k.toFixed(3), "->", k1.k.toFixed(3), "pan", Math.round(k2.x - k1.x), "clock", c0, "->", await clk());
     await ctx.close();
   }

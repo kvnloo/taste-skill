@@ -349,7 +349,16 @@ function home(anim = true) {
     // one day opens on the latest push (legible cards); a multi-day window on all of it (day labels, lanes, render strip)
     const x0 = X(WIN.a), xr = X(WIN.b) - x0 + 240, b = { x0: WIN.multi ? -440 : Math.max(-440, xr - 3200), x1: xr, y0: -150, y1: 1820 };
     c = camFor(b, 40);
-    if (phone() && !WIN.multi && c.k < PHONE_K) c = { k: PHONE_K, x: innerWidth - 16 - xr * PHONE_K, y: 128 - b.y0 * PHONE_K };
+    if (phone() && !WIN.multi && c.k < PHONE_K) {
+      // frame the cards in view between the chrome and the replay bar; if they don't fit, the chats win (bottom-anchored)
+      const k = PHONE_K, x = innerWidth - 16 - xr * k, a0 = -x / k, a1 = (innerWidth - x) / k, top0 = 140, avail = innerHeight - 100 - top0;
+      let top = 1e9, bot = -1e9;
+      for (const n of nodes.values()) { const p = n.pos.pm; if (!p || p.o < 0.5 || n.kind === "axis" || p.x + p.w < a0 || p.x > a1) continue;
+        top = Math.min(top, p.y); if (n.kind === "session") bot = Math.max(bot, p.y + ((n.h ??= n.el.offsetHeight) || 150)); }
+      if (bot < top) bot = top + avail / k;
+      top = Math.max(top, bot - avail / k);
+      c = { k, x, y: top0 + Math.max(0, (avail - (bot - top) * k) / 2) - top * k };
+    }
   }
   anim ? flyTo(c) : ((S.cam = c), applyCam());
 }
@@ -390,7 +399,7 @@ const release = (e) => {
   touches.delete(e.pointerId);
   if (pinch) { if (touches.size < 2) pinch = null; if (!touches.size) { drag = null; stage.classList.remove("panning"); } else { const [q] = touches.values(); drag = { x: q.x, y: q.y, cx: S.cam.x, cy: S.cam.y, moved: true }; } return; }
   stage.classList.remove("panning");
-  if (e.type === "pointerup" && drag && !drag.moved) { const n = drag.node; if (n) { select(n.dataset.id); if (phone() && n.getBoundingClientRect().top + 40 > $("#drawer").getBoundingClientRect().top) focusNode(n.dataset.id, Math.max(S.cam.k, 0.5)); } else select(null); }
+  if (e.type === "pointerup" && drag && !drag.moved) { const n = drag.node; if (n) { select(n.dataset.id); if (phone() && n.getBoundingClientRect().top + 40 > $("#drawer").getBoundingClientRect().top) focusNode(n.dataset.id, Math.max(S.cam.k, PHONE_K)); } else select(null); }
   drag = null;
 };
 stage.addEventListener("pointerup", release);

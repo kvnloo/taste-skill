@@ -365,7 +365,7 @@ body:has(#drawer:not([hidden])) .m-hint { display: none; }
   .m-span .info { flex-basis: 100%; text-align: center; font-size: 11px; padding: 1px 0 3px; }
   .m-span:has([data-span="custom"].on) .info { display: none; }
   .m-panel { left: 8px !important; right: 8px !important; width: auto; top: auto; bottom: calc(82px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 210px); padding: 16px 16px 20px; }
-  .m-panel.right { bottom: calc(82px + env(safe-area-inset-bottom)); max-height: 58dvh; } /* the tapped card stays visible above */
+  .m-panel.right { bottom: calc(82px + env(safe-area-inset-bottom)); max-height: 48dvh; } /* the tapped card keeps its neighbours visible above */
   .m-panel h2 { font-size: 24px; }
   .m-panel h4, .kicker, .m-panel :is(.kpis span, .waste span, .out, .st, .rec em, .sesrow em, .sc i, .by span, .rot, .catkey) { font-size: 11px; }
   .m-panel .x { width: 44px; height: 44px; }

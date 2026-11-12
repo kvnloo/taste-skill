@@ -235,7 +235,17 @@ reload, search, deep link, toggle, stale rendering, light theme and a 390 px pho
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
 `MISSION=1 node scripts/shot.mjs <dir>` checks `/mission` on the local snapshot and the public sample (no two nodes
-overlap in either mode, replay reaches the ticker, LIVE pins to now, an Insights failure highlights its chats).
+overlap in either mode, replay reaches the ticker, LIVE pins to now, an Insights failure highlights its chats), then
+walks it on 390×844 and 360×800 touch phones. At every state it fails on sideways scroll, controls off screen, taps
+under 36 px (44 for lone buttons), chrome text under 11 px, overlapping fixed surfaces, a sheet hiding the replay bar,
+fewer than 3 legible chat titles in view, or a drawer covering the card that opened it. It also checks pinch, pan and
+scrub. On phones the chrome takes two rows and Retro and the chat drawer become bottom sheets. Picking a sink folds
+the sheet so its chats stay visible.
+
+`e2e/army` is the tester army: vision-model `e2e explore` lanes (`goals.tsv`) at the same phone sizes and desktop. Each
+lane runs in its own Boat sandbox: `cd e2e/army && with-keys.sh python3 boat/up.py`. The `canary-390` lane runs the
+pre-fix build (`e53431c`) and must report its off-screen controls, so a clean report on the real build means
+something. Findings land in `runs/boat/<ts>/findings.json`.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;
 it exits 1 if the phone p95 frame exceeds `BUDGET_MS` (default 34).
 

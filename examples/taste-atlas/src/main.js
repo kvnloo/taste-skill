@@ -4,7 +4,6 @@ import { OPERATIONS, opById } from "./taxonomy.js";
 import { mountBookmarks } from "./bookmarks.js";
 import { mountWork } from "./work.js";
 import { mountBoardFilter } from "./boardfilter.js";
-import { mountProject } from "./project.js";
 import { brief, briefMarkdown } from "./brief.js";
 import { mountNav, getTheme, saveTheme, setView } from "./nav.js";
 
@@ -15,7 +14,7 @@ const A = createAtlas({ svg, card, width: () => innerWidth, height: () => innerH
 const phone = () => innerWidth <= 700;
 function region(avoidCard) {
   const shelf = document.querySelector(".shelf")?.getBoundingClientRect();
-  if (phone()) { const top = (card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
+  if (phone()) { const top = (document.body.classList.contains("project-focus") ? 100 : card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
   // The mosaic shelf covers the whole graph (left: 18px); fitting into the zero-width gap gave scale Infinity.
   const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth, x = avoidCard ? card.getBoundingClientRect().right + 12 : 0;
   return { x, y: 0, w: free - x < 240 ? innerWidth : free - x, h: innerHeight };
@@ -161,6 +160,6 @@ card.addEventListener("click", async (e) => {
 });
 window.__atlas = { A, go, brief: makeBrief, briefMarkdown };
 mountBookmarks(A, { go, fly }).then((bm) => { if (bm) document.getElementById("stat").textContent += ` · ${bm.count} of your bookmarks${bm.sources ? ` · ${bm.sources} sources` : ""}`; window.__atlas.bm = bm; return mountWork(A, { bm, fly, start }); })
-  .then(async (work) => { window.__atlas.work = work; window.__atlas.project = await mountProject(A, { work }); return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
+  .then((work) => { window.__atlas.work = work; return mountBoardFilter(A, { bm: window.__atlas.bm, fly }); })
   .then((bf) => { window.__atlas.boards = bf; }).catch((e) => console.error("work:", e));
 requestAnimationFrame(frame);

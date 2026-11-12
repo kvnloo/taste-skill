@@ -82,7 +82,7 @@ export function build(cfg, { work, mission, asks, titles, home, now = Date.now()
       const merge = (k, n) => top(g.flatMap((x) => (x[k] ?? []).flatMap(([v, c]) => Array(c).fill(v))), n);
       const hits = mine.filter((a) => re?.test(a.text)).map((a) => ({ ...a, score: density(a.text, re) })).sort((a, b) => b.score - a.score || b.t - a.t), sess = top(hits.map((a) => a.session), 6);
       for (const pin of pins) if (re?.test(`${pin.title} ${pin.text}`)) pin.screens.push(s.id);
-      return { id: s.id, name: s.name, phase: s.phase, component: s.component, branch: !!s.branch, next: s.next ?? [],
+      return { id: s.id, name: s.name, phase: s.phase, component: s.component, branch: !!s.branch, next: s.next ?? [], critic: s.critic ?? null,
         shot: s.shot, takes: s.takes ?? [], scene: scene ? { id: scene.id, name: scene.name, state: scene.state, note: scene.note } : null,
         code: g.map(({ repo, gh, missing, files, commits }) => ({ repo, gh, missing: !!missing, files: files ?? 0, commits: commits?.length ?? 0 })),
         commits: g.flatMap((x) => (x.commits ?? []).map((c) => ({ ...c, repo: x.repo, gh: x.gh }))).sort((a, b) => b.t - a.t).slice(0, 40),
@@ -92,7 +92,7 @@ export function build(cfg, { work, mission, asks, titles, home, now = Date.now()
         notes: notes.filter((n) => re?.test(n.text)).map((n) => ({ ...n, text: snippet(n.text, re) })),
         ideas: (mission?.ideas ?? []).filter((i) => re?.test(i.text)).map((i) => ({ text: i.text, kind: i.kind, stream: i.stream })) };
     });
-    out.push({ id: p.id, generatedAt: Math.round(now), windowDays: win, phases: p.phases, screens, pins, boards: boards.map(({ id, b }) => ({ id, title: b.title, refs: b.refs.length })),
+    out.push({ id: p.id, title: p.title ?? null, frame: p.frame ?? null, critic: p.critic ?? null, generatedAt: Math.round(now), windowDays: win, phases: p.phases, screens, pins, boards: boards.map(({ id, b }) => ({ id, title: b.title, refs: b.refs.length })),
       asksTotal: mine.length, unpinned: pins.filter((x) => !x.screens.length).length });
   }
   return out;
@@ -104,7 +104,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { asks, titles } = loadAsks(wcfg.sources?.asks);
   for (const r of Object.keys(wcfg.repos)) if (!work.repos[r]?.path) work.repos[r] = wcfg.repos[r];
   const home = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
-  for (const p of build(cfg, { work, mission, asks, titles, home })) {
+  const built = build(cfg, { work, mission, asks, titles, home });
+  if (!process.argv.includes("--dry")) writeFileSync(join(app, "data/projects.json"), JSON.stringify(built.map((p) => p.id)));
+  for (const p of built) {
     if (!process.argv.includes("--dry")) writeFileSync(join(app, `data/project.${p.id}.json`), JSON.stringify(p));
     const sc = p.screens;
     console.log(JSON.stringify({ project: p.id, screens: sc.length, shots: sc.filter((s) => existsSync(join(app, "data", s.shot))).length, commits: sc.reduce((a, s) => a + s.commits.length, 0),

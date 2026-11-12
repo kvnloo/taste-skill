@@ -4,6 +4,7 @@
 // A component shared by two products is drawn once; the other product shows a dashed portal to it. Any post links to a
 // work node from its detail view ("Link to work…"), saved in data/work-links.json and tethered to its tile on the ring.
 import { packCircles, fitInCircle, weightAt, ago } from "./pack.js";
+import { createProject } from "./project.js";
 
 const R = 250; // world radius of the disc inside the operation ring (operations sit at r = 320)
 const ST = { "on-track": ["On track", "#1f8a5b", "#3fbf84"], watch: ["Watch", "#c27c0e", "#e0a43a"], "at-risk": ["At risk", "#d6453d", "#ef6a5f"], blocked: ["Blocked", "#7b3fa0", "#b07ad6"], unknown: ["Unknown", "#8a857a", "#8f8a80"] };
@@ -41,6 +42,9 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     prevL = L.size ? L : null; L = next; anim = prevL ? performance.now() : null; dirty++;
   }
   layout();
+  // Project focus (src/project.js): products with a storyboard open as their journey, alone on the canvas.
+  const pj = createProject(W, { P, C }); await pj.load();
+  const aspect = () => (innerWidth > 700 ? (innerWidth - Math.min(440, innerWidth * 0.42) - 60) / (innerHeight - 150) : innerWidth / (innerHeight * 0.45));
   const at = (key, t) => { const b = L.get(key), a = anim && prevL?.get(key); if (!a) return b; const k = ease(Math.min(1, (t - anim) / 450)); return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, r: a.r + (b.r - a.r) * k }; };
 
   // A component's tiles: pages first (thumbnail-first), then linked posts and films, then its latest PRs as chips.
@@ -101,6 +105,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     if (!want) return;
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox - c.x * s), dpr * (oy - c.y * s));
     const ink = dark ? "#ece8df" : "#1b1a17", mute = dark ? "#8f8a80" : "#8a857a", bg = dark ? "#0f1314" : "#f4f2ed", lw = (p) => p / s;
+    if (pj.on()) return pj.paint(ctx, { text, img, lw, dark, ink, mute, bg, px, hover });
     // Inspo ↔ work edges: a faint bundle from each node to its posts' tiles on the ring; the focused node's are strong.
     const ek = `${links.length},${[...hidden].join()},${L.size}`;
     if (ek !== endsKey) { endsKey = ek; ends = []; for (const p of W.products) for (const kd of kids(p)) {
@@ -202,7 +207,13 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   }
   A.workAt = (e) => {
     if (!on()) return false;
-    const [wx, wy] = toWorld(e.clientX, e.clientY); if (Math.hypot(wx, wy) > R + 10) return false;
+    const [wx, wy] = toWorld(e.clientX, e.clientY);
+    if (pj.on()) { // a screen opens its story; a greyed neighbour opens that project; empty space steps out
+      const h = pj.hit(wx, wy);
+      if (h?.startsWith("screen:")) pick(h.slice(7) === pj.sel() ? null : h.slice(7)); else if (h) focusOn(h.slice(6)); else if (pj.sel()) pick(null); else focusOn(null);
+      return true;
+    }
+    if (Math.hypot(wx, wy) > R + 10) return false;
     const h = hit(wx, wy);
     if (!h) focusOn(null);
     else if (h.tile) openTile(h.tile);
@@ -213,29 +224,37 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   };
   document.getElementById("atlas").addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse" || e.buttons || !on()) return;
-    const [wx, wy] = toWorld(e.clientX, e.clientY), h = Math.hypot(wx, wy) <= R + 10 ? hit(wx, wy) : null, k = h ? h.tile?.key ?? h.id : null;
+    const [wx, wy] = toWorld(e.clientX, e.clientY), h = !pj.on() && Math.hypot(wx, wy) <= R + 10 ? hit(wx, wy) : null, k = pj.on() ? pj.hit(wx, wy) : h ? h.tile?.key ?? h.id : null;
     if (k !== hover) { hover = k; dirty++; }
-    if (h) document.getElementById("atlas").style.cursor = "pointer";
+    if (k) document.getElementById("atlas").style.cursor = "pointer";
   });
 
   // Focus: fly to a node (depth 0 portfolio, 1 product, 2 component), deep-link it, and fill the shelf.
   const boxOf = (id) => { const o = L.get(id) ?? { x: 0, y: 0, r: R + 14 }, m = o.r * (C.has(id) ? 1.04 : 1.12); return [o.x - m, o.y - m, o.x + m, o.y + m]; };
-  // raw may carry a project screen (glide@lanes); project mode (src/project.js) takes over products that have a storyboard.
-  function focusOn(id, raw = id) {
+  function focusOn(id, screen) {
     if (id && !L.has(id)) return;
     if (hidden.delete("work")) localStorage.setItem("taste:hidden", JSON.stringify([...hidden])); bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
-    focus = id; dirty++; fly(boxOf(id ?? "disc"), 900, 24, true);
+    focus = id; dirty++;
+    if (P.has(id) && pj.has(id)) { pj.enter(id, L.get(id), aspect()); document.body.classList.add("project-focus"); hud.hidden = true; return pick(screen, 900); }
+    leave(); fly(boxOf(id ?? "disc"), 900, 24, true);
     history.replaceState(null, "", location.pathname + location.search + "#work" + (id ? ":" + id : ""));
     const nodes = id == null ? W.components : C.has(id) ? [C.get(id)] : id.endsWith(">linked") ? [] : P.get(id).components.map((x) => C.get(x));
     const posts = id == null ? W.products.flatMap((p) => [p.id, ...p.components]).flatMap(extras) : id.endsWith(">linked") ? extras(id.split(">")[0]) : C.has(id) ? extras(id) : [id, ...P.get(id).components].flatMap(extras);
     const pages = nodes.flatMap((c) => c.pages.map((pg, i) => ({ c, pg, i })));
     bm?.setCustom({ title: id == null ? "Your work" : name(id.replace(/>linked$/, "")), items: [...new Map(posts.map((b) => [b.id, b])).values()],
       n: pages.length + posts.length, html: pages.map(({ c, pg, i }) => `<a href="#" data-wpage="${esc(c.id)}|${i}" title="${esc(pg.name)}">${pg.shot ? `<img loading="lazy" src="./data/${esc(pg.shot)}" alt="" />` : `<div class="txt">${esc(pg.name)}<br><b>down</b> · ${esc(pg.code)}</div>`}<span class="meta"><em style="background:${pg.shot ? ST["on-track"][1] : ST["at-risk"][1]}"></em>${esc(pg.name)} · ${esc(c.name)}</span></a>`).join("") });
-    drawHud(); A.onWorkFocus?.(raw);
+    drawHud();
   }
   // After the shelf opens/closes or the window resizes, keep the focused Work node framed (true = handled).
-  A.refit = (ms = 600) => { if (focus === undefined) return false; fly(boxOf(focus ?? "disc"), ms, 24, true); return true; };
-  const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; bm?.setCustom(null); A.onWorkFocus?.(undefined); };
+  A.refit = (ms = 600) => { if (focus === undefined) return false; fly(pj.on() ? pj.pick(pj.sel()) : boxOf(focus ?? "disc"), ms, 24, true); return true; };
+  const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; leave(); bm?.setCustom(null); };
+  // Project focus: pick a screen (or none: the whole journey), fill the shelf, then fly clear of it.
+  function pick(sid, ms = 600) {
+    const b = pj.pick(sid); dirty++; bm?.setCustom(pj.shelf()); fly(b, ms, 24, true);
+    history.replaceState(null, "", location.pathname + location.search + `#work:${pj.id()}${pj.sel() ? "@" + pj.sel() : ""}`);
+  }
+  function leave() { if (!pj.on()) return; pj.exit(); dirty++; document.body.classList.remove("project-focus"); }
+  addEventListener("resize", () => { if (pj.on()) { pj.relayout(aspect()); dirty++; A.refit(0); } });
 
   // Proof lightbox (depth 3): text lives only here.
   const box = document.createElement("div"); box.className = "lightbox work-lb"; document.body.appendChild(box);
@@ -308,6 +327,8 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   document.addEventListener("click", (e) => {
     const u = e.target.closest?.("[data-wunlink]"); if (u) { e.preventDefault(); save(u.dataset.item, u.dataset.wunlink, "remove"); return; }
     const g = e.target.closest?.("[data-wgo]"); if (g) { e.preventDefault(); document.querySelector(".lightbox.on .lb-x")?.click(); close(); focusOn(g.dataset.wgo); return; }
+    const ps = e.target.closest?.("[data-pjscreen]"); if (ps && pj.on()) { e.preventDefault(); pick(ps.dataset.pjscreen || null); return; }
+    const tk = e.target.closest?.("[data-take]"); if (tk) { const hero = document.querySelector(".pj-hero"); if (hero) hero.src = tk.dataset.take; document.querySelectorAll("[data-take]").forEach((x) => x.classList.toggle("on", x === tk)); return; }
     const pg = e.target.closest?.("[data-wpage]"); if (pg) { e.preventDefault(); const [cid, i] = pg.dataset.wpage.split("|"); openPage(C.get(cid), +i); return; }
     const pf = e.target.closest?.("[data-wproof]"); if (pf) { proof(pf.dataset.wproof); return; }
     const wp = e.target.closest?.("[data-wpost]"); if (wp) { close(); bm?.detail(post(wp.dataset.wpost)); }
@@ -316,8 +337,8 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.target.tagName === "INPUT" || focus === undefined) return;
     e.stopImmediatePropagation();
-    if (A.projectKey?.(e)) return;
     if (box.classList.contains("on")) return close();
+    if (pj.on() && pj.sel()) return pick(null);
     if (C.has(focus)) focusOn(C.get(focus).product);
     else if (focus?.includes(">")) focusOn(focus.split(">")[0]);
     else if (focus) focusOn(null);
@@ -340,10 +361,10 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   const find = (q) => { const ws = q.toLowerCase().split(/\s+/).filter(Boolean); return [...W.products.map((p) => ({ id: p.id, name: p.name, sub: `work · ${ST[p.status.value]?.[0] ?? ""}`, h: `${p.name} ${p.id} work` })),
     ...W.components.map((c) => ({ id: c.id, name: c.name, sub: `work · ${P.get(c.product).name}${c.also.length ? " · also " + c.also.join(", ") : ""}`, h: `${c.name} ${c.id} ${P.get(c.product).name} ${c.also.join(" ")}` }))]
     .filter((x) => ws.every((w) => x.h.toLowerCase().includes(w))).slice(0, 5); };
-  const fromHash = (h) => { if (!/^work(:|$)/.test(h)) return false; const raw = decodeURIComponent(h.slice(5)) || null, id = raw?.split("@")[0]; focusOn(id && (L.has(id) ? id : null), raw); return true; };
+  const fromHash = (h) => { if (!/^work(:|$)/.test(h)) return false; const [id, sc] = (decodeURIComponent(h.slice(5)) || "").split("@"); focusOn(id && L.has(id) ? id : null, sc); return true; };
   addEventListener("hashchange", () => fromHash(location.hash.slice(1)));
   bm?.addLayer("work", "Work", W.products.length, "#2f6fd6");
   (function loop(t) { paint(t); requestAnimationFrame(loop); })(performance.now());
   if (start) setTimeout(() => fromHash(start), 650); // after the opening zoom
-  return { focus: focusOn, blur, find, proof, redraw: () => dirty++, links: () => links, loaded: () => [...imgs.values()].filter((v) => v instanceof ImageBitmap).length, tethers: () => ends.map(([, tl, node]) => ({ item: tl.b.id, node })), layout: () => L, state: () => ({ focus, asOf, hl, visible: on(), hover }), data: W, hit: (x, y) => hit(...toWorld(x, y)), screen: (id) => { const o = L.get(id), c = A.view.cam; return o && { x: (c.cx ?? innerWidth / 2) + (o.x - c.x) * c.s, y: (c.cy ?? innerHeight / 2) + (o.y - c.y) * c.s, r: o.r * c.s }; } };
+  return { focus: focusOn, blur, find, proof, redraw: () => dirty++, links: () => links, loaded: () => [...imgs.values()].filter((v) => v instanceof ImageBitmap).length, tethers: () => ends.map(([, tl, node]) => ({ item: tl.b.id, node })), layout: () => L, state: () => ({ focus, asOf, hl, visible: on(), hover }), project: () => pj.state(), pick, data: W, hit: (x, y) => hit(...toWorld(x, y)), screen: (id) => { const o = L.get(id), c = A.view.cam; return o && { x: (c.cx ?? innerWidth / 2) + (o.x - c.x) * c.s, y: (c.cy ?? innerHeight / 2) + (o.y - c.y) * c.s, r: o.r * c.s }; } };
 }

@@ -256,6 +256,7 @@ function serve() {
     if (u.pathname === "/network") return file(res, join(app, "network.html"));
     if (u.pathname === "/onboard") return file(res, join(app, "onboard.html"));
     if (u.pathname.startsWith("/api/onboard")) return onboardApi(req, res, u);
+    if (u.pathname === "/mission") return file(res, join(app, "mission.html"));
     if (u.pathname === "/api/boards") { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(boardList())); return; }
     if (u.pathname === "/api/work-links" && req.method === "POST") {  // atlas: link a post to a work node, or unlink it
       let body = ""; req.on("data", (c) => { body += c; if (body.length > 2048) req.destroy(); });

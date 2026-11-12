@@ -10,25 +10,25 @@ const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const techById = new Map(TECHNIQUES.map((t) => [t.id, t]));
-const LAYERS = { saved: "X bookmarks", portfolio: "Portfolio", ask: "Asked about", film: "Films", ref: "Studied", project: "Projects", idea: "Ideas", youtube: "YouTube", spotify: "Spotify", tidal: "Tidal", music: "Music", github: "GitHub stars", linkedin: "LinkedIn" };
+const LAYERS = { saved: "X bookmarks", portfolio: "Portfolio", ask: "Asked about", film: "Films", ref: "Studied", project: "Projects", idea: "Ideas", youtube: "YouTube", spotify: "Spotify", tidal: "Tidal", music: "Music", github: "GitHub stars", linkedin: "LinkedIn", web: "Web bookmarks" };
 // Layer colours: the outer ring's tiles before their picture loads, the layer bar's dots, LinkedIn's initials tiles.
-const LCOL = { saved: "#d24b2a", youtube: "#e62117", github: "#6e5494", linkedin: "#0a66c2", spotify: "#1db954" };
+const LCOL = { saved: "#d24b2a", youtube: "#e62117", github: "#6e5494", linkedin: "#0a66c2", spotify: "#1db954", web: "#c98a33" };
 const lcol = (l) => LCOL[l] ?? "#8a857a";
-const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗", youtube: "Watch on YouTube ↗", spotify: "Play on Spotify ↗", tidal: "Play on TIDAL ↗", music: "Open ↗", github: "Open on GitHub ↗", linkedin: "Open on LinkedIn ↗" };
+const OPEN = { portfolio: "Open ↗", ask: "Open source ↗", film: "Open film ↗", ref: "Open ↗", project: "Open on GitHub ↗", idea: "Open ↗", youtube: "Watch on YouTube ↗", spotify: "Play on Spotify ↗", tidal: "Play on TIDAL ↗", music: "Open ↗", github: "Open on GitHub ↗", linkedin: "Open on LinkedIn ↗", web: "Open ↗" };
 const OWN = new Set(["film", "idea", "portfolio"]); // your own work: show its name, not an @handle
-const NAMED = new Set(["youtube", "spotify", "tidal", "music", "linkedin"]); // channels and artists are names, not @handles
+const NAMED = new Set(["youtube", "spotify", "tidal", "music", "linkedin", "web"]); // channels and artists are names, not @handles
 const loadImg = (src) => new Promise((ok, no) => { const i = new Image(); i.decoding = "async"; i.onload = () => ok(i); i.onerror = no; i.src = src; });
 
 export async function mountBookmarks(A, { go, fly }) {
   const get = (f) => fetch(f, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [data0, src0, hist, net] = await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json"), get("./data/history.atlas.json"), get("./data/network.atlas.json")]);
+  const [data0, src0, hist, net, links] = await Promise.all([get("./data/bookmarks.atlas.json"), get("./data/sources.atlas.json"), get("./data/history.atlas.json"), get("./data/network.atlas.json"), get("./data/links.atlas.json")]);
   // Watch/listen history (scripts/history.mjs) joins the sources layers; it is unlabelled, so it lists in the shelf.
   // LinkedIn connections (scripts/network.mjs) join as one more layer: a person is a tile, grouped by company hub.
   const hubs = new Map((net?.nodes ?? []).filter((n) => n.type === "company").map((n) => [n.label, n.reach]));
   const people = (net?.nodes ?? []).filter((n) => n.type === "person" || n.type === "fof").map((n) => ({
     id: "li-" + n.id, nid: n.id, layer: "linkedin", url: n.url, title: n.label, author: n.company ?? "", date: n.since ?? "", warmth: n.warmth,
     group: hubs.has(n.company) ? n.company : "Other", text: [n.label, [n.position, n.company].filter(Boolean).join(" @ "), n.warmth > 1 ? `warmth ${n.warmth}` : ""].filter(Boolean).join(" · "), technique: null }));
-  const extra = [...(src0?.items ?? []), ...(hist?.items ?? []), ...people];
+  const extra = [...(src0?.items ?? []), ...(hist?.items ?? []), ...people, ...(links?.items ?? [])]; // links: browser bookmarks (scripts/onboard.mjs)
   const src = extra.length ? { ...src0, items: extra } : null;
   if (!data0 && !src) return null;
   const data = data0 ?? { items: [], count: 0, method: src.method };
@@ -74,20 +74,20 @@ export async function mountBookmarks(A, { go, fly }) {
   // Outer ring: every item with no technique (watch history, stars, LinkedIn, unsorted saves, sources) sits in its
   // layer's sector beyond the constellation, grouped by category (channel, language, company) in reading order.
   const hidden = new Set(JSON.parse(localStorage.getItem("taste:hidden") ?? "[]"));
-  const GROUP = { youtube: (b) => b.author, github: (b) => b.why?.split(" · ")[1] ?? "Other", linkedin: (b) => b.group, saved: () => "Unsorted" };
+  const GROUP = { youtube: (b) => b.author, github: (b) => b.why?.split(" · ")[1] ?? "Other", linkedin: (b) => b.group, web: (b) => b.author, saved: () => "Unsorted" };
   const outer = new Map();
   // Big layers get a sector each; the small ones (portfolio, asks, films, studied, projects, ideas) share one.
-  const SECTORS = { saved: "X bookmarks · unsorted", youtube: "YouTube", github: "GitHub stars", linkedin: "LinkedIn", sources: "Your work & sources" };
+  const SECTORS = { saved: "X bookmarks · unsorted", youtube: "YouTube", github: "GitHub stars", linkedin: "LinkedIn", web: "Web bookmarks", sources: "Your work & sources" };
   const sectorOf = (l) => (SECTORS[l] ? l : "sources");
   for (const b of everything) if (!b.technique) { const k = sectorOf(b.layer ?? "saved"); outer.get(k)?.push(b) ?? outer.set(k, [b]); }
   const groups = new Map(); // "layer:name" -> { key, layer, name, items, box, at }
   const R1 = Math.max(R0, ...tiles.map((t) => Math.hypot(t.x, t.y))) + 5 * T, nOut = [...outer.values()].reduce((a, l) => a + l.length, 0), GAP = 0.05;
   let a0 = -Math.PI / 2;
   // Small sectors sit between big ones so their titles never meet.
-  for (const [layer, list] of ["linkedin", "saved", "youtube", "sources", "github"].filter((l) => outer.has(l)).map((l) => [l, outer.get(l)])) {
+  for (const [layer, list] of ["linkedin", "saved", "web", "youtube", "sources", "github"].filter((l) => outer.has(l)).map((l) => [l, outer.get(l)])) {
     const by = new Map();
     for (const b of list) { const g = String((GROUP[layer] ?? (() => LAYERS[layer] ?? layer))(b) || "Other"); by.get(g)?.push(b) ?? by.set(g, [b]); }
-    if (layer === "youtube" || layer === "github") for (const [g, l] of by) if (l.length < 3 && g !== "Other") { by.delete(g); by.get("Other")?.push(...l) ?? by.set("Other", [...l]); }
+    if (layer === "youtube" || layer === "github" || layer === "web") for (const [g, l] of by) if (l.length < 3 && g !== "Other") { by.delete(g); by.get("Other")?.push(...l) ?? by.set("Other", [...l]); }
     const rank = (g, l) => (g === "Other" ? -1 : layer === "linkedin" ? hubs.get(g) ?? 0 : l.length);
     const ordered = [...by].sort(([g, l], [h, m]) => rank(h, m) - rank(g, l));
     const span = Math.max(0.25, (2 * Math.PI - GAP * outer.size - 0.5) * (list.length / nOut));

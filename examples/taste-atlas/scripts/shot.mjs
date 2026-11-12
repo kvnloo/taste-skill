@@ -6,7 +6,46 @@ const out = process.argv[2] ?? ".";
 // CHROME=/path picks the browser; Google Chrome has the H.264 codec X's mp4s need, Playwright's Chromium does not.
 const b = await chromium.launch({ executablePath: process.env.CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome` });
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+p.on("response", (r) => r.status() >= 400 && console.log("http", r.status(), r.url()));
 const errs = []; p.on("pageerror", (e) => errs.push(String(e))); p.on("console", (m) => m.type() === "error" && errs.push(m.text()));
+// Every page names the URL behind each bare "Failed to load resource" console error (logged, so a FAIL says what broke).
+const np = b.newPage.bind(b); b.newPage = async (...a) => { const q = await np(...a); q.on("response", (r) => r.status() >= 400 && console.log("http", r.status(), r.url())); return q; };
+// ONBOARD=1: the import page on a fresh data dir (run the server with an empty $ATLAS_DATA): 8 source cards, upload
+// fixture exports through the real file input (FIXTURES=<dir> of files), the import job finishes, the cards turn on,
+// and the Atlas shows each imported layer in the Layers bar. Desktop + phone screenshots.
+if (process.env.ONBOARD) {
+  const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [], { readdirSync } = await import("node:fs");
+  const files = readdirSync(process.env.FIXTURES).map((f) => `${process.env.FIXTURES}/${f}`);
+  for (const [name, vp] of [["onboard-desk", { width: 1440, height: 900 }], ["onboard-phone", { width: 390, height: 844 }]]) {
+    const q = await b.newPage({ viewport: vp }); q.on("pageerror", (e) => errs.push(String(e))); q.on("console", (m) => m.type() === "error" && !/status of 404/.test(m.text()) && errs.push(m.text()));
+    q.on("response", (r) => r.status() === 404 && !/\/data\//.test(r.url()) && errs.push(`404 ${r.url()}`)); // absent optional data files 404 by design
+    await q.goto(`${base}/onboard?theme=dark`); await q.waitForSelector(".ob-card");
+    const before = await q.evaluate(() => ({ cards: document.querySelectorAll(".ob-card").length, done: window.__onboard.state.done }));
+    if (name === "onboard-desk") {
+      await q.screenshot({ path: `${out}/${name}-empty.png`, fullPage: true });
+      const n0 = await q.evaluate(() => window.__onboard.state.jobs.length);
+      await q.setInputFiles("#file", files);
+      await q.waitForFunction((n) => { const j = window.__onboard.state?.jobs; return j.length > n && ["done", "failed"].includes(j[0].state); }, n0, { timeout: 60000 });
+    }
+    const head = await q.evaluate(() => ({ sw: document.documentElement.scrollWidth, ...Object.fromEntries([".views", ".bar h1", "#theme"].map((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [s, [Math.round(r.left), Math.round(r.right), Math.round(r.height)]]; })) }));
+    console.log(name, "header", JSON.stringify(head));
+    if (head.sw > vp.width || head["#theme"][1] > vp.width) bad.push(`${name}: header overflows (${JSON.stringify(head)})`);
+    const after = await q.evaluate(() => ({ done: window.__onboard.state.done, on: [...document.querySelectorAll(".ob-card.in")].map((c) => c.dataset.source), job: window.__onboard.state.jobs[0]?.state, drop: document.querySelector("#drop").getBoundingClientRect().width }));
+    console.log(name, JSON.stringify({ before, after }));
+    if (before.cards !== 8) bad.push(`${name}: ${before.cards} cards`);
+    if (name === "onboard-desk" && (after.job !== "done" || after.done <= before.done)) bad.push(`${name}: import ${after.job}, ${before.done} -> ${after.done} sources`);
+    if (after.drop < Math.min(vp.width, 1180) * 0.8) bad.push(`${name}: drop zone ${after.drop}px wide`);
+    await q.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+    const want = after.on;
+    await q.goto(`${base}/?theme=dark`); await q.waitForFunction(() => window.__atlas?.bm, null, { timeout: 30000 }).catch(() => bad.push(`${name}: atlas never mounted the imported layers`));
+    const layers = await q.evaluate(() => [...document.querySelectorAll(".layers [data-layer]")].map((x) => x.dataset.layer));
+    const map = { x: "saved", web: "web" };
+    for (const s of want) if (map[s] && !layers.includes(map[s])) bad.push(`${name}: layer ${map[s]} missing from the Layers bar (${layers})`);
+    await q.waitForTimeout(1500); await q.screenshot({ path: `${out}/${name}-atlas.png` });
+  }
+  if (errs.length) bad.push(...errs.slice(0, 5));
+  await b.close(); if (bad.length) { console.error("FAIL", bad); process.exit(1); } console.log("PASS"); process.exit(0);
+}
 // HISTORY=1: check /history (desktop + phone): one card per imported source, calendars drawn, covers load, no errors.
 if (process.env.HISTORY) {
   const base = process.env.BASE ?? "http://127.0.0.1:8789", bad = [];

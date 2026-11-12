@@ -16,6 +16,13 @@ lists real posts he saved as references.
 
 CLI (Node 22+, no install): `<repo>/examples/taste-atlas/scripts/atlas.mjs`. JSON on stdout.
 
+## No data yet
+
+If `atlas.mjs` reports no bookmarks, the user has not imported anything. Point them at **+ Import**
+(`/onboard` on `board.mjs serve`), or run `node scripts/onboard.mjs status` and then
+`node scripts/onboard.mjs add <exports...>` (zips, bookmarks `.html`, folders), `github <user>`, or `x`.
+Never import someone's data without them asking.
+
 ## Steps
 
 1. Find techniques for the request:

@@ -47,6 +47,26 @@ With a private `data/` folder (bookmarks classified by `products/taste` scripts,
 atlas also draws every saved post around the ring, shows "N of your posts" on the card, a shelf with
 subject filters (`b`), a full-screen mosaic (`m`) and a post detail view.
 
+### Bring your own data: Import (`/onboard`)
+
+A fresh install shows only the taxonomy; a banner points to **+ Import** (`/onboard`). That page lists every
+source with how to get its export, and has one drop zone: drop a Google Takeout, Spotify or LinkedIn zip, a
+browser bookmarks `.html` (Chrome, Firefox, Safari, Edge, Arc, Raindrop, Pocket), a folder, or a CSV/JSON/TXT,
+and each file is detected and handed to its importer. GitHub (through your `gh` login) and X bookmarks
+(read-only, through twitter-cli's browser login) are one button each. Each source turns on as a layer on the
+Atlas. The CLI is the same code path:
+
+```sh
+node scripts/onboard.mjs status                  # every source: imported or not, count, date, how to get it
+node scripts/onboard.mjs add ~/Downloads/takeout.zip bookmarks.html Spotify/   # detect and import
+node scripts/onboard.mjs github <user>           # stars + contribution calendar
+node scripts/onboard.mjs x                       # sync X bookmarks (merged; classified posts keep their technique)
+```
+
+Zips are opened in place and only the files an importer reads are extracted (from Takeout, just
+`watch-history.html`). Everything lands in `$ATLAS_DATA` (default `data/`, gitignored); uploads from the page
+go to `$ATLAS_DATA/inbox/`. Nothing leaves the machine except cover-art lookups.
+
 ### Sources: what you asked for, what you made, what you build
 
 `scripts/sources.mjs` adds a second private layer, `data/sources.atlas.json`, with these shelf chips:
@@ -201,7 +221,10 @@ canvas and SVG layers stay registered mid-zoom (`MOBILE=1` adds phone shots).
 drawn, every cover loads). `NETWORK=1 node scripts/shot.mjs <dir>` checks `/network` the same way (every node
 drawn, a company card shows its way in, search finds it). `WORK=1 node scripts/shot.mjs <dir>` checks the Work layer (every product
 on screen, a real click into glide and Taste pages, thumbnails drawn, the proof lightbox, a post linked and tethered after a
-reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
+reload, search, deep link, toggle, stale rendering, light theme and a 390 px phone). `ONBOARD=1 FIXTURES=<dir> node scripts/shot.mjs <dir>` runs the import journey on desktop and phone: point
+the server at an empty `ATLAS_DATA`, and it uploads every file in `FIXTURES` through the real file input,
+waits for the import, and checks that the source cards and Atlas layers turn on.
+`node --test scripts/*.test.mjs` covers detection and the importers without network. `node scripts/lod.mjs` checks deep zoom: clips autoplay without costing frames, and
 at the 24× maximum tiles show the original file (X's full-resolution upload or a native-size video frame) and
 native-size clips; a photo's detail view opens at its original width.
 `node scripts/perf.mjs` measures idle load and zoom frame times on desktop and a 4x-throttled phone;

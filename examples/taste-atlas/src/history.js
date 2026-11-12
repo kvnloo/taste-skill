@@ -16,8 +16,9 @@ const IMPORT = `<p class="hint">Add more: <code>node scripts/history.mjs &lt;exp
   other music CSV, and any GitHub user through your <code>gh</code> login.</p>`;
 
 const r = await fetch("./data/history.atlas.json", { cache: "no-store" });
-if (!r.ok) { $("#history").innerHTML = `<p class="empty-boards">No history imported yet (${r.status}).</p>${IMPORT}`; throw new Error(`history.atlas.json ${r.status}`); }
-const data = await r.json(), series = data.series ?? {};
+const data = r.ok ? await r.json() : null; // the server answers null for a layer not imported yet
+if (!data) { $("#history").innerHTML = `<p class="empty-boards">No history imported yet. <a href="/onboard">Import it →</a></p>${IMPORT}`; throw new Error(`history.atlas.json: ${r.ok ? "not imported" : r.status}`); }
+const series = data.series ?? {};
 const bySrc = Object.groupBy(data.items, (i) => i.source);
 const srcs = Object.keys(series).sort((a, b) => series[b].events - series[a].events);
 $("#history").innerHTML = (srcs.length ? srcs.map(card).join("") : `<p class="empty-boards">History has items but no series: re-run the importer.</p>`) + IMPORT;

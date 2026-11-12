@@ -159,3 +159,47 @@ a.tq { text-decoration: none; } a.tq:hover { text-decoration: underline; }
 .rounds a { flex: none; border-radius: 8px; overflow: hidden; border: 2px solid transparent; }
 .rounds a.pin { border-color: var(--accent); } .rounds a.like { border-color: var(--like); } .rounds a.nope { opacity: .35; }
 .rounds img { height: 64px; display: block; }
+
+/* Import view (/onboard, src/onboard.js) */
+.onboard { display: grid; gap: 18px; padding: 22px 20px 60px; max-width: 1180px; margin: 0 auto; }
+.ob-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; }
+.ob-lede { flex: 1 1 420px; margin: 0; font: 400 15px/1.55 Inter, sans-serif; color: var(--ink); max-width: 64ch; }
+.ob-progress { font: 12px "IBM Plex Mono", monospace; color: var(--mute); display: grid; gap: 6px; min-width: 200px; }
+.ob-progress b { color: var(--ink); font-size: 14px; }
+.ob-progress i { display: block; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.ob-progress s { display: block; height: 100%; width: 0; background: var(--like); transition: width .4s; }
+.ob-drop { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 34px 20px; border: 1.5px dashed var(--line); border-radius: 16px; background: var(--panel); cursor: pointer; transition: border-color .2s, background .2s; }
+.ob-drop:hover, .ob-drop:focus-visible, .ob-drop.over { border-color: var(--accent); outline: none; }
+.ob-drop.over { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.ob-drop.busy { cursor: progress; opacity: .8; }
+.ob-drop b { font: 22px "Archivo Black", sans-serif; }
+.ob-drop span { font: 14px Inter, sans-serif; color: var(--ink); max-width: 60ch; }
+.ob-drop small { font: 11px "IBM Plex Mono", monospace; color: var(--mute); }
+.ob-drop code, .ob-card code { font: 12px "IBM Plex Mono", monospace; }
+.onboard > * { min-width: 0; }
+.ob-jobs { display: grid; gap: 6px; }
+.ob-job { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--mute); border-radius: 10px; background: var(--panel); font: 13px Inter, sans-serif; }
+.ob-job.running, .ob-job.queued { border-left-color: var(--accent); }
+.ob-job.done { border-left-color: var(--like); }
+.ob-job.failed { border-left-color: var(--nope); }
+.ob-job span { flex: 1; color: var(--mute); font: 12px "IBM Plex Mono", monospace; }
+.ob-job a { color: var(--accent); font: 500 12px "IBM Plex Mono", monospace; text-decoration: none; }
+.ob-job details { flex-basis: 100%; } .ob-job pre { max-height: 200px; overflow: auto; font: 11px "IBM Plex Mono", monospace; white-space: pre-wrap; color: var(--mute); }
+.ob-card .ob-how { flex: 1; } /* actions and export links share a baseline across a row */
+.ob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.ob-card { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.ob-card header { display: flex; align-items: center; gap: 10px; }
+.ob-card header i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--mute); flex: none; }
+.ob-card.in header i { background: var(--like); border-color: var(--like); }
+.ob-card h2 { margin: 0; flex: 1; font: 600 15px Inter, sans-serif; }
+.ob-card header em { font: 500 12px "IBM Plex Mono", monospace; font-style: normal; color: var(--like); }
+.ob-card header em.no { color: var(--mute); }
+.ob-stat { margin: 0; font: 11px "IBM Plex Mono", monospace; color: var(--mute); }
+.ob-how { margin: 0; font: 13px/1.5 Inter, sans-serif; color: var(--ink); opacity: .85; flex: 1; }
+.ob-act { display: flex; gap: 8px; }
+.ob-act input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: 13px Inter, sans-serif; }
+.ob-act button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--ink); color: var(--bg); font: 600 13px Inter, sans-serif; cursor: pointer; }
+.ob-act button:disabled { opacity: .4; cursor: not-allowed; }
+.ob-need { margin: 0; font: 11px "IBM Plex Mono", monospace; color: var(--nope); }
+.ob-link { align-self: flex-start; margin-top: auto; color: var(--accent); font: 500 12px "IBM Plex Mono", monospace; text-decoration: none; }
+@media (max-width: 700px) { .onboard { padding: 14px 12px 40px; } .ob-grid { grid-template-columns: 1fr; } .ob-drop { padding: 24px 14px; } .ob-drop b { font-size: 18px; } }

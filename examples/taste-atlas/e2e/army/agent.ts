@@ -8,7 +8,7 @@ const provider = createOpenAICompatible({
 
 export const agents = {
   default: {
-    model: provider.chatModel(process.env.E2E_MODEL ?? 'google/gemma-4-31b-it'),
+    model: provider.chatModel(process.env.E2E_MODEL ?? 'nvidia/nemotron-3.5-super-vl-120b-a12b'),
     system:
       'You are a usability tester for Taste Mission: a zoomable canvas that replays one day of AI-agent chats as a retrospective ' +
       '(synthetic public sample data dated 2026-01-15). Act like a person holding a phone: one visible step at a time, only tap what you can see. ' +

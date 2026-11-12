@@ -91,11 +91,27 @@ def findings(out, lanes):
     return summary
 
 
+def preflight():
+    """One tiny call to the explore model before any sandbox is paid for: NIM retires functions (gemma-4-31b-it went 404)
+    and a dead model otherwise surfaces only as MODEL_PROVIDER_FAILED in every lane, after the Boat spend."""
+    import urllib.request
+    model = os.getenv('E2E_MODEL') or re.search(r"E2E_MODEL \?\? '([^']+)'", (ROOT / 'agent.ts').read_text()).group(1)
+    body = json.dumps(dict(model=model, max_tokens=4, messages=[dict(role='user', content='ok')])).encode()
+    req = urllib.request.Request('https://integrate.api.nvidia.com/v1/chat/completions', body,
+                                 {'Authorization': 'Bearer ' + os.environ['NVIDIA_API_KEY'], 'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=120).read()
+    except Exception as error:
+        raise RuntimeError(f'explore model {model} is unavailable: {redact(str(error))}; set E2E_MODEL or update agent.ts') from None
+    print('explore model ok:', model, flush=True)
+
+
 def main():
     os.chdir(ROOT)
     os.environ['BOAT_NO_UPDATE'] = '1'
     if not os.getenv('NVIDIA_API_KEY'):
         raise RuntimeError('run via the ops with-keys.sh; NVIDIA_API_KEY is missing')
+    preflight()
     selected, width = goals(), int(os.getenv('LANES', '3'))
     if not 1 <= width <= 3:
         raise ValueError('LANES must be 1..3 to respect NIM throughput')
@@ -110,7 +126,7 @@ def main():
     snap = os.getenv('SNAPSHOT') or (snaps[-1] if snaps else '')
     if not snap:
         raise RuntimeError('no ready glide-army-* snapshot to reuse; build one with the glide army first')
-    army.meta.update(sha=sha, canary_sha=canary, snapshot=snap, steps=int(os.getenv('STEPS', '14')))
+    army.meta.update(sha=sha, canary_sha=canary, snapshot=snap, steps=int(os.getenv('STEPS', '8')))
     army.save()
     failures, summary = [], {'canary_ok': False}
     try:

@@ -153,7 +153,11 @@ if (process.env.MISSION) {
     await q.touchscreen.tap(sb.x + sb.width * 0.3, sb.y + sb.height / 2); await q.waitForTimeout(500); if ((await clk()) === c0) bad.push(`${tag}: tapping the scrubber did not move the clock`);
     // responsiveness: the slowest tap's own handler time (processingStart..End, i.e. the app's work, not the host's queueing);
     // web-vitals calls an interaction over 500 ms poor. Host load inflates it, so the verdict that counts runs on Boat
-    const inp = await q.evaluate(() => window.__inp.sort((x, y) => y.run - x.run)[0]); if (inp && inp.run > 500) bad.push(`${tag}: a tap on ${inp.t || inp.n} blocks the page ${inp.run} ms (INP poor > 500)`);
+    // a real slow handler repeats; a busy-host spike does not: re-tap the worst control once and fail only if it is slow again
+    const worst = () => q.evaluate(() => window.__inp.sort((x, y) => y.run - x.run)[0]); let inp = await worst();
+    if (inp && inp.run > 500) { const first = inp, sel = /^(today|week|project|custom)$/.test(first.t) ? `[data-span="${first.t}"]` : first.t ? `#${first.t}` : null;
+      if (sel) { await q.evaluate(() => (window.__inp = [])); await tap(sel); await q.waitForTimeout(1500); inp = await worst(); }
+      if (!sel || (inp && inp.run > 500)) bad.push(`${tag}: a tap on ${first.t || first.n} blocks the page ${first.run} ms, again ${inp?.run ?? "?"} ms (INP poor > 500)`); }
     console.log(tag, "slowest tap", inp ? `${inp.t || inp.n} ${inp.run}ms run / ${Math.round(inp.d)}ms total` : "n/a");
     console.log(tag, "pinch", k0.k.toFixed(3), "->", k1.k.toFixed(3), "pan", Math.round(k2.x - k1.x), "clock", c0, "->", await clk());
     await ctx.close();

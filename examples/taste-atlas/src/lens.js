@@ -43,7 +43,7 @@ export async function mountLens(A, { bm, fly }) {
     for (const b of posts.values()) if (b.technique) document.querySelector(`.node[data-id="${CSS.escape(b.technique)}"]`)?.classList.add("on");
     const near = new Set();
     for (const t of new Set([...posts.values()].map((b) => b.technique).filter(Boolean)))
-      (bm.byTech.get(t) ?? []).filter((b) => !posts.has(b.id)).slice(0, NEAR).forEach((b) => near.add(b.id));
+      (bm.byTech.get(t) ?? []).filter((b) => !posts.has(b.id) && near.size < NEAR).slice(0, NEAR).forEach((b) => near.add(b.id)); // keep 1 or 2 connected items greyed in total, not 2 per technique
 
     const prs = comps.flatMap((c) => c.prs ?? []).filter((x, i, a) => a.findIndex((y) => y.url === x.url) === i).sort((a, b) => (a.state === "OPEN") - (b.state === "OPEN") || b.t - a.t).reverse();
     const asks = [...(p.asks ?? []), ...comps.flatMap((c) => c.asks ?? [])].filter((x, i, a) => a.findIndex((y) => y.text === x.text) === i).sort((a, b) => b.t - a.t);
@@ -66,9 +66,9 @@ export async function mountLens(A, { bm, fly }) {
     ].join("");
     // On its own atlas everything on the canvas is the project's context: nothing greys out, the shelf lists the skills.
     if (p.atlas) { const own = bm.items.filter((b) => b.layer === "skill").sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); return bm.setCustom({ title: p.name, kind: "PROJECT", ids: null, items: own, n: own.length, html }); }
-    bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n: posts.size + cards.length, html });
+    const box = bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n: posts.size + cards.length, html, pack: true });
     const ts = [...posts.keys(), ...near].map((i) => bm.tileOf(i)).filter(Boolean);
-    if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
+    if (box) setTimeout(() => fly(box, 900, 6, true), 280); // after the shelf's .25s width transition, so the fit sees the final free area else if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
   }
   sel.addEventListener("change", () => show(sel.value));
   const fromHash = (h = location.hash) => { const m = /^#project:(.+)$/.exec(h); if (m && m[1] !== cur) show(decodeURIComponent(m[1])); };

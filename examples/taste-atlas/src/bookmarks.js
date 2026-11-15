@@ -180,16 +180,19 @@ export async function mountBookmarks(A, { go, fly }) {
   // A small fixed pool of <video> elements is reused and laid over their tiles, so the compositor plays them and the
   // canvas never repaints for a video frame: the cost stays bounded however many posts are on screen.
   const POOL = innerWidth <= 700 ? 6 : 16, FLOOR = innerWidth <= 700 ? 3 : 8, MIN_PX = 48;
-  // Self-tuning: every second compare the frame rate with clips playing to the rate with none; if clips cost more than
-  // 20%, play one fewer (never below FLOOR); when the rate holds, earn one back. Hardware decode keeps all of them.
-  let limit = POOL, fps0 = 60, win = { t: 0, n: 0 };
+  // Self-tuning, clips against clips: Chrome steps the page from 60 to 30 fps as soon as two videos play and then holds
+  // 30 flat up to 14+ clips (measured on an RTX 3080 Ti), so comparing against the no-video rate trimmed every wall to
+  // FLOOR for a cost the extra clips never added. fpsV is the best rate seen with clips playing (slow decay); trim when
+  // more clips drop below it, or when the page falls under 45% of the no-video rate; earn one back while it holds.
+  let limit = POOL, fps0 = 60, fpsV = 0, win = { t: 0, n: 0 };
   function tune(now) {
     if (!win.t) win.t = now; win.n++;
     if (now - win.t < 1000) return;
     const fps = (win.n * 1000) / (now - win.t), live = [...playing.values()].filter((v) => !v.paused).length; win = { t: now, n: 0 };
-    if (!live) fps0 = Math.max(fps0 * 0.9, fps); // track the no-video baseline (decays so a busy start does not stick)
-    else if (fps >= fps0 * 0.92 && live >= limit && limit < POOL) { limit++; dirty++; }
-    else if (fps < fps0 * 0.8 && limit > FLOOR) { limit = Math.max(FLOOR, Math.min(limit, live) - 1); dirty++; console.info(`taste: ${fps.toFixed(0)} fps with ${live} clips (baseline ${fps0.toFixed(0)}), playing at most ${limit}`); }
+    if (!live) { fps0 = Math.max(fps0 * 0.9, fps); return; } // the no-video baseline (decays so a busy start does not stick)
+    fpsV = Math.max(fpsV * 0.98, fps);
+    if (fps >= fpsV * 0.92 && fps >= fps0 * 0.45 && live >= limit && limit < POOL) { limit++; dirty++; }
+    else if ((fps < fpsV * 0.8 || fps < fps0 * 0.45) && limit > FLOOR) { limit = Math.max(FLOOR, Math.min(limit, live) - 1); dirty++; console.info(`taste: ${fps.toFixed(0)} fps with ${live} clips (clip best ${fpsV.toFixed(0)}, none ${fps0.toFixed(0)}), playing at most ${limit}`); }
   }
   const dock = document.createElement("div"); dock.className = "bm-video-dock"; cv.after(dock);
   const pool = Array.from({ length: POOL }, () => {

@@ -18,7 +18,8 @@ function region(avoidCard) {
   if (phone()) { const top = (document.body.classList.contains("project-focus") ? 100 : card.getBoundingClientRect().bottom || 100) + 6; return { x: 0, y: top, w: innerWidth, h: Math.max(160, (shelf?.top ?? innerHeight) - top) }; }
   // The mosaic shelf covers the whole graph (left: 18px); fitting into the zero-width gap gave scale Infinity.
   const free = document.querySelector(".shelf.open") ? shelf.left - 18 : innerWidth, x = avoidCard ? card.getBoundingClientRect().right + 12 : 0;
-  return { x, y: 0, w: free - x < 240 ? innerWidth : free - x, h: innerHeight };
+  const pane = document.querySelector(".ctxpane.open")?.getBoundingClientRect();
+  return { x, y: 0, w: free - x < 240 ? innerWidth : free - x, h: pane ? Math.min(pane.top, document.querySelector(".layers")?.getBoundingClientRect().top ?? pane.top) - 8 : innerHeight };
 }
 // Deeper zooms leave room for side labels (technique names sit beside their node).
 const fitR = (id) => A.fit(id, phone() ? ((A.graph.byId.get(id)?.level ?? 0) >= 3 ? 0.72 : 0.94) : 0.82, region());

@@ -125,7 +125,7 @@ export async function mountBookmarks(A, { go, fly }) {
   let pickKey = null;
   const pickSet = (key) => (key.startsWith("L:") ? new Set([...groups.values()].filter((g) => !g.layerRow && g.sector === key.slice(2)).map((g) => g.key)) : new Set([key]));
   function pick(key, quiet) {
-    if (key === pickKey) return; pickKey = key; dirty++; litFor = null; if (key) custom = null;
+    if (key === pickKey) return; pickKey = key; dirty++; litFor = null; if (key) { custom = null; if (packed) compact(null); }
     if (key) { loose = true; localStorage.setItem("taste:loose", "1"); for (const g of groups.values()) if (g.key === key || (key.startsWith("L:") && g.sector === key.slice(2))) hidden.delete(g.layer); saveHidden(); fly?.(boxOf(key)); }
     if (!quiet) draw();
   }
@@ -156,32 +156,40 @@ export async function mountBookmarks(A, { go, fly }) {
     if (!m) return; S = m.size; m.ids.forEach((id, i) => spriteAt.set(id, [(i % m.cols) * S, Math.floor(i / m.cols) * S]));
     sprite = await loadImg("./data/sprite.jpg"); dirty++;
   }).catch((e) => console.error("sprite:", e));
-  // Deep zoom (gigapixel-style level of detail): 64px sprite -> 480px thumb -> <=1600px still -> the original file at full
+  // Mid tier (scripts/sprite.py): the same order at 160px, so a tile between 64 and ~170 device px is sharp without a decode.
+  let sprite2 = null; const S2 = 160;
+  if (innerWidth > 700) fetch("./data/sprite160.json").then((r) => (r.ok ? loadImg("./data/sprite160.jpg") : null)).then((im) => { sprite2 = im; dirty++; }).catch((e) => console.error("sprite160:", e));
+  // Deep zoom (gigapixel-style level of detail): 64px sprite -> 160px sprite -> 480px thumb -> <=1600px still -> the original file at full
   // resolution (X's upload, or a native-size video frame), each fetched only when a
   // tile is big enough on screen to need it, decoded off the main thread (createImageBitmap) so zooming never stalls.
   let hires = {};
   fetch("./data/hires.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).then((m) => { hires = m; dirty++; }).catch((e) => console.error("hires:", e));
   const bitmap = (src) => fetch(src).then((r) => { if (!r.ok) throw new Error(`${r.status} ${src}`); return r.blob(); }).then((b) => createImageBitmap(b));
   const big = new Map(); // tile -> ImageBitmap of the <=1600px still or the original; least recently drawn are closed past BIG_MAX
-  const BIG_MAX = innerWidth <= 700 ? 12 : 40; // ~40 tiles of 240+ css px fit a desktop screen: never evict what is visible
+  const BIG_MAX = innerWidth <= 700 ? 12 : 64; // ~40 tiles of 240+ css px fit a desktop screen: never evict what is visible
   const useBig = (t) => { const im = big.get(t); big.delete(t); big.set(t, im); while (big.size > BIG_MAX) { const [k, v] = big.entries().next().value; big.delete(k); v?.close?.(); k.big = null; k.bigW = 0; } };
+  // 480px thumbs: the least recently drawn are closed past THUMB_MAX, so a long pan never piles up decoded bitmaps.
+  const thumbs = new Map(), THUMB_MAX = innerWidth <= 700 ? 200 : 400;
+  const useThumb = (t) => { thumbs.delete(t); thumbs.set(t, 1); while (thumbs.size > THUMB_MAX) { const [k] = thumbs.keys(); thumbs.delete(k); if (k.full instanceof ImageBitmap) k.full.close(); k.full = null; } };
   // Which file a tile of `dp` device pixels needs: the original once the 1600px still would be upscaled.
   const stillFor = (h, dp) => (h.orig && dp > 1400 && (h.w ?? 9999) > 1700 ? [h.orig, h.w ?? 9999] : h.full ? [h.full, 1600] : h.orig ? [h.orig, h.w ?? 9999] : null);
   // Clips: the 480px loop while a tile is small, the native-size loop once it is bigger than that on screen.
   const clipFor = (h, dp) => "./data/" + (h.clip_hd && dp > 520 ? h.clip_hd : h.clip ?? h.clip_hd);
-  // Videos autoplay on the canvas: muted 4 s loops (480px, local) for the few largest video tiles nearest the centre.
+  // Videos autoplay on the canvas: muted 4 s loops (480px, local) for every video tile on screen, nearest the centre first,
+  // up to POOL. zoomed in should read as a wall of moving posts, not one: the tuner may trim but never below FLOOR.
   // A small fixed pool of <video> elements is reused and laid over their tiles, so the compositor plays them and the
   // canvas never repaints for a video frame: the cost stays bounded however many posts are on screen.
-  const POOL = innerWidth <= 700 ? 2 : 4, MIN_PX = 72;
+  const POOL = innerWidth <= 700 ? 6 : 16, FLOOR = innerWidth <= 700 ? 3 : 8, MIN_PX = 48;
   // Self-tuning: every second compare the frame rate with clips playing to the rate with none; if clips cost more than
-  // 20%, play one fewer (never below 1). Machines with hardware decode keep all of them, slow ones settle without lag.
+  // 20%, play one fewer (never below FLOOR); when the rate holds, earn one back. Hardware decode keeps all of them.
   let limit = POOL, fps0 = 60, win = { t: 0, n: 0 };
   function tune(now) {
     if (!win.t) win.t = now; win.n++;
     if (now - win.t < 1000) return;
     const fps = (win.n * 1000) / (now - win.t), live = [...playing.values()].filter((v) => !v.paused).length; win = { t: now, n: 0 };
     if (!live) fps0 = Math.max(fps0 * 0.9, fps); // track the no-video baseline (decays so a busy start does not stick)
-    else if (fps < fps0 * 0.8 && limit > 1) { limit = Math.min(limit, live) - 1; dirty++; console.info(`taste: ${fps.toFixed(0)} fps with ${live} clips (baseline ${fps0.toFixed(0)}), playing at most ${limit}`); }
+    else if (fps >= fps0 * 0.92 && live >= limit && limit < POOL) { limit++; dirty++; }
+    else if (fps < fps0 * 0.8 && limit > FLOOR) { limit = Math.max(FLOOR, Math.min(limit, live) - 1); dirty++; console.info(`taste: ${fps.toFixed(0)} fps with ${live} clips (baseline ${fps0.toFixed(0)}), playing at most ${limit}`); }
   }
   const dock = document.createElement("div"); dock.className = "bm-video-dock"; cv.after(dock);
   const pool = Array.from({ length: POOL }, () => {
@@ -206,7 +214,33 @@ export async function mountBookmarks(A, { go, fly }) {
   }
 
   let key = "", lit = null, litFor = null;
+  // Filter refit, ported from Sound Atlas (music-atlas setTracks morph + flyToIds): a project or board keeps only its
+  // posts, so they leave their seats on the full ring, glide into one packed block just outside the graph on the side
+  // most of them came from, and the caller fits the camera to the block. Clearing the filter glides every tile home.
+  let pack = null, packed = false, onCanvas = [];
+  function compact(c) {
+    for (const t of tiles) { t.hx ??= t.x; t.hy ??= t.y; t.fx = t.x; t.fy = t.y; t.tx = t.hx; t.ty = t.hy; }
+    let box = null;
+    const sel = c?.ids && c.pack ? tiles.filter((t) => visible(t) && (c.ids.has(t.b.id) || c.near?.has(t.b.id))) : [];
+    if (sel.length) {
+      sel.sort((a, b) => c.ids.has(b.b.id) - c.ids.has(a.b.id) || String(a.id).localeCompare(String(b.id))); // its own posts first (by technique), greyed neighbours last
+      const n = sel.length, cols = Math.ceil(Math.sqrt(n * 1.6)), rows = Math.ceil(n / cols), step = T + G * 2, w = cols * step, h = rows * step;
+      const mx = sel.reduce((m, t) => m + t.hx, 0), my = sel.reduce((m, t) => m + t.hy, 0), a = Math.atan2(my, mx), r = R0 + Math.hypot(w, h) / 2;
+      const cx = Math.cos(a) * r, cy = Math.sin(a) * r;
+      sel.forEach((t, i) => { t.tx = cx - w / 2 + ((i % cols) + 0.5) * step; t.ty = cy - h / 2 + (Math.floor(i / cols) + 0.5) * step; });
+      box = [cx - w / 2 - T / 2, cy - h / 2 - T / 2, cx + w / 2 + T / 2, cy + h / 2 + T / 2];
+    }
+    const moving = tiles.filter((t) => t.fx !== t.tx || t.fy !== t.ty);
+    pack = moving.length ? { t0: performance.now(), ms: 700, moving } : null; packed = !!box; dirty++;
+    return box;
+  }
+  function packStep(now) {
+    const k = Math.min(1, (now - pack.t0) / pack.ms), e = 1 - (1 - k) ** 3;
+    for (const t of pack.moving) { t.x = t.fx + (t.tx - t.fx) * e; t.y = t.fy + (t.ty - t.fy) * e; }
+    dirty++; if (k >= 1) pack = null;
+  }
   function paint() {
+    if (pack) packStep(performance.now());
     const c = A.view.cam, f = A.view.focus, dpr = Math.min(devicePixelRatio || 1, innerWidth <= 700 ? 1.5 : 2), W = innerWidth, H = innerHeight;
     const k = `${pickKey},${c.x.toFixed(1)},${c.y.toFixed(1)},${c.s.toFixed(4)},${c.cx},${c.cy},${W},${H},${f},${A.view.theme},${dirty},${hoverTile?.b.id}`;
     if (k === key) return; key = k;
@@ -232,17 +266,18 @@ export async function mountBookmarks(A, { go, fly }) {
       ctx.stroke();
     }
     // Pick each tile's level from its size in device pixels: sprite until 64, thumb until 480, then the hi-res still.
-    let budget = 12, bigBudget = 3;
-    const dp = px * dpr, cands = [];
+    let budget = 24, bigBudget = 6;
+    const dp = px * dpr, cands = [], seen = [];
     const crop = (im, x, y, w = im.width, h = im.height) => { const m = Math.min(w, h); ctx.drawImage(im, (w - m) / 2, (h - m) / 2, m, m, x, y, T, T); };
     for (const t of tiles) {
       if (t.x < vx0 || t.x > vx1 || t.y < vy0 || t.y > vy1 || !visible(t)) continue;
       const on = custom?.ids ? custom.ids.has(t.b.id) : !lit || lit.has(t.id); // a board filter lights its own posts
       if (custom?.ids && !on && !custom.near?.has(t.b.id)) continue; // a project/board shows its posts and a few greyed neighbours, nothing else
       ctx.globalAlpha = on ? 1 : custom?.ids ? 0.2 : 0.06;
+      if (on && px >= 3 && t.x > vx0 + T && t.x < vx1 - T && t.y > vy0 + T && t.y < vy1 - T) seen.push(t);
       const x = t.x - T / 2, y = t.y - T / 2, sp = spriteAt.get(t.b.id), h = hires[t.b.id];
-      if (on && t.b.thumb && (dp > 180 || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
-      const want = on && dp > 520 && px > 240 && h && stillFor(h, dp);
+      if (on && t.b.thumb && (dp > (sprite2 ? 170 : 72) || (!sp && px >= 6)) && !t.full && budget-- > 0) { t.full = "loading"; bitmap("./data/" + t.b.thumb).then((im) => { t.full = im; useThumb(t); dirty++; }, (e) => { t.full = "error"; console.error("thumb:", e.message); }); }
+      const want = on && dp > 500 && h && stillFor(h, dp);
       if (want && t.big !== "loading" && t.big !== "error" && (t.bigW ?? 0) < want[1] && bigBudget-- > 0) {
         const prev = t.big; t.big = "loading";
         bitmap("./data/" + want[0]).then((im) => { if (prev instanceof ImageBitmap) { big.delete(t); prev.close(); } t.big = im; t.bigW = want[1]; big.set(t, im); useBig(t); dirty++; },
@@ -253,7 +288,8 @@ export async function mountBookmarks(A, { go, fly }) {
       const v = playing.get(t);
       if (t.big instanceof ImageBitmap && dp > 480) { useBig(t); crop(t.big, x, y); }
       else if (t.big === "loading" && big.has(t)) crop(big.get(t), x, y);
-      else if (t.full instanceof ImageBitmap) crop(t.full, x, y);
+      else if (t.full instanceof ImageBitmap) { useThumb(t); crop(t.full, x, y); }
+      else if (sprite2 && sp && dp > 70) ctx.drawImage(sprite2, (sp[0] * S2) / S, (sp[1] * S2) / S, S2, S2, x, y, T, T);
       else if (sprite && sp && px >= 3) ctx.drawImage(sprite, sp[0], sp[1], S, S, x, y, T, T);
       else {
         ctx.fillStyle = t.b.rgb ?? t.color ?? opById[t.op].color; ctx.fillRect(x, y, T, T);
@@ -265,6 +301,7 @@ export async function mountBookmarks(A, { go, fly }) {
       }
     }
     if (budget < 0 || bigBudget < 0) dirty++; // more pictures to start next frame
+    onCanvas = seen;
     const mx = W / 2, my = H / 2, sx = (t) => ox + (t.x - c.x) * c.s - mx, sy = (t) => oy + (t.y - c.y) * c.s - my;
     cands.sort((a, b) => Math.hypot(sx(a), sy(a)) - Math.hypot(sx(b), sy(b)));
     assignVideos(cands);
@@ -417,9 +454,36 @@ export async function mountBookmarks(A, { go, fly }) {
   });
   addEventListener("keydown", (e) => { if (e.key === "m" && e.target.tagName !== "INPUT") toggleWide(); });
   addEventListener("keydown", (e) => { if (e.key === "b" && e.target.tagName !== "INPUT") { open = !open; draw(); setTimeout(refit, 270); } });
+  // Context pane (bottom; its chip in the layer bar or "e" opens and closes it): every entity drawn on the canvas right
+  // now, in reading order, refreshed as you pan, zoom or filter. Hover rings the tile; click opens the post.
+  const pane = document.createElement("section"), paneChip = document.createElement("button");
+  pane.className = "ctxpane"; document.body.appendChild(pane); paneChip.className = "ctxchip"; paneChip.title = "Everything on the canvas (e)";
+  let paneOpen = localStorage.getItem("taste:ctxpane") !== "0" && innerWidth > 700, paneSig = "", paneAt = 0;
+  const placeChip = () => { const bar = document.querySelector(".layers"); if (bar && !bar.contains(paneChip)) bar.append(paneChip); };
+  new MutationObserver(placeChip).observe(document.body, { childList: true, subtree: false }); placeChip();
+  function paneTick(now, force) {
+    if (!force && now - paneAt < 300) return; paneAt = now;
+    const list = [...new Map(onCanvas.map((t) => [t.b.id, t])).values()].sort((a, b) => Math.round(a.y / (T + G)) - Math.round(b.y / (T + G)) || a.x - b.x);
+    paneChip.innerHTML = `On canvas <b>${list.length.toLocaleString()}</b>`; paneChip.classList.toggle("on", paneOpen); placeChip();
+    // Nothing of ours on the canvas (e.g. a project storyboard is open): keep the choice but get out of the way.
+    const show = paneOpen && list.length > 0;
+    document.body.classList.toggle("ctx-open", show); pane.classList.toggle("open", show);
+    const sig = show + ":" + list.map((t) => t.b.id).join(",");
+    if (sig === paneSig && !force) return; paneSig = sig;
+    if (!show) { pane.innerHTML = ""; return; }
+    const by = {}; for (const t of list) { const l = LAYERS[t.b.layer ?? "saved"] ?? t.b.layer ?? "saved"; by[l] = (by[l] ?? 0) + 1; }
+    const MAX = 240;
+    pane.innerHTML = `<header><b>On canvas · ${list.length.toLocaleString()}</b><small>${custom?.title ? `${esc(custom.title)} · ` : ""}${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}${list.length > MAX ? ` · first ${MAX} shown, zoom in for the rest` : ""}</small><button class="cp-x" title="Close (e)">×</button></header>
+      <div class="cp-row">${list.slice(0, MAX).map((t) => { const b = t.b, v = hires[b.id]?.clip; return `<a href="#" data-cpost="${esc(b.id)}" title="${esc((b.title ?? b.text ?? "").slice(0, 140))}">${b.thumb ? `<img loading="lazy" src="./data/${esc(b.thumb)}" alt="" />` : `<div class="txt">${esc((b.title ?? b.text ?? "").slice(0, 60))}</div>`}${v ? "<i>▶</i>" : ""}<span>${esc(b.author ? "@" + b.author : b.title ?? "")}</span></a>`; }).join("")}</div>`;
+  }
+  const togglePane = () => { paneOpen = !paneOpen; localStorage.setItem("taste:ctxpane", paneOpen ? "1" : "0"); paneTick(performance.now(), true); };
+  paneChip.addEventListener("click", togglePane);
+  addEventListener("keydown", (e) => { if (e.key === "e" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) togglePane(); });
+  pane.addEventListener("click", (e) => { if (e.target.closest(".cp-x")) return togglePane(); const a = e.target.closest("[data-cpost]"); if (a) { e.preventDefault(); detail(byId.get(a.dataset.cpost)); } });
+  pane.addEventListener("pointerover", (e) => { const id = e.target.closest("[data-cpost]")?.dataset.cpost; const t = id ? onCanvas.find((x) => x.b.id === id) ?? null : null; if (t !== hoverTile) { hoverTile = t; dirty++; } });
   (function poll(now) {
-    if (A.view.focus !== last) { last = A.view.focus; pickKey = null; custom = null; litFor = null; shown = 60; draw(); }
-    tune(now);
+    if (A.view.focus !== last) { last = A.view.focus; pickKey = null; custom = null; if (packed) compact(null); litFor = null; shown = 60; draw(); }
+    tune(now); paneTick(now);
     paint(); requestAnimationFrame(poll);
   })(0);
   draw(); go(A.view.focus, 600);
@@ -430,7 +494,8 @@ export async function mountBookmarks(A, { go, fly }) {
       .sort((x, y) => !!y.layerRow - !!x.layerRow || y.items.length - x.items.length).slice(0, 5).map((g) => ({ key: g.key, name: g.layerRow ? g.name : `${g.name}`, sub: g.layerRow ? "layer" : LAYERS[g.layer] ?? g.layer, n: g.items.length })); };
   // Hooks for the Work layer (src/work.js): its own layer toggle, a shelf list, where a post's tile sits, any post by id.
   const addLayer = (k, name, n, col) => { LAYERS[k] = name; LCOL[k] = col; counts.set(k, n); drawBar(); };
-  const setCustom = (c) => { custom = c; dirty++; if (c) { pickKey = null; if (innerWidth > 700) open = true; } shown = 60; draw(); };
+  // Returns the packed block's world box when c.pack asked for the refit (null otherwise): fly the camera there.
+  const setCustom = (c) => { custom = c; dirty++; if (c) { pickKey = null; if (innerWidth > 700) open = true; } shown = 60; draw(); return c?.pack || packed ? compact(c) : null; };
   const tileOf = (id) => tiles.find((t) => t.b.id === id && visible(t)) ?? null;
-  return { pick, findGroups, groups, hidden, addLayer, setCustom, tileOf, byId, tilesShown: () => tiles.filter(visible).length, hires: () => hires, lod: () => ({ limit, fps0, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
+  return { pick, findGroups, groups, hidden, addLayer, setCustom, tileOf, byId, tilesShown: () => tiles.filter(visible).length, hires: () => hires, lod: () => ({ limit, fps0, thumbs: thumbs.size, sprite2: !!sprite2, onCanvas: onCanvas.length, packed, playing: [...playing].map(([t, v]) => ({ id: t.b.id, ready: v.readyState, t: +v.currentTime.toFixed(2), src: v.src.split("/data/")[1], w: v.videoWidth })), big: big.size, bigW: Math.max(0, ...[...big.values()].map((im) => im?.width ?? 0)), hires: Object.keys(hires).length, tiles: tiles.filter((t) => hires[t.b.id]?.clip).slice(0, 40).map((t) => ({ id: t.b.id, x: t.x, y: t.y })) }), setQuery, matching, count: items.filter((b) => b.layer === "saved").length, sources: src?.items.length ?? 0, total: data.count, items, byTech, under, detail };
 }

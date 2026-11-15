@@ -20,10 +20,10 @@ export async function mountBoardFilter(A, { bm, fly }) {
     const b = await fetch(`/s/${cur}/board.json`, { cache: "no-store" }).then((r) => r.json());
     const posts = [], cards = [];
     for (const r of b.refs) { const hit = byUrl.get(urlKey(r.url)); hit ? posts.push(hit) : cards.push(r); }
-    bm.setCustom({ title: b.title, kind: "BOARD", ids: new Set(posts.map((p) => p.id)), items: posts, n: posts.length + cards.length,
+    const box = bm.setCustom({ pack: true, title: b.title, kind: "BOARD", ids: new Set(posts.map((p) => p.id)), items: posts, n: posts.length + cards.length,
       html: `<a href="/s/${esc(cur)}/" class="txt-card"><div class="txt">Open board<br><b>${esc(b.title)}</b></div></a>` + cards.map((r) => `<a href="${esc(r.url ?? `/s/${cur}/`)}" target="_blank" rel="noopener" title="${esc(r.title)}">${r.image ? `<img loading="lazy" src="${esc(r.image.startsWith("http") || r.image.startsWith("/") ? r.image : `/s/${cur}/${r.image}`)}" alt="" />` : `<div class="txt">${esc(r.title)}</div>`}<span class="meta">${esc(r.title)}</span></a>`).join("") });
     const ts = posts.map((p) => bm.tileOf(p.id)).filter(Boolean);
-    if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
+    if (box) setTimeout(() => fly(box, 900, 6, true), 280); // after the shelf's .25s width transition, so the fit sees the final free area else if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
   }
   sel.addEventListener("change", () => show(sel.value));
   const want = new URLSearchParams(location.search).get("board");

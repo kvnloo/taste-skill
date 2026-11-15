@@ -83,7 +83,7 @@ export function build(cfg, { work, mission, asks, titles, home, now = Date.now()
       const hits = mine.filter((a) => re?.test(a.text)).map((a) => ({ ...a, score: density(a.text, re) })).sort((a, b) => b.score - a.score || b.t - a.t), sess = top(hits.map((a) => a.session), 6);
       for (const pin of pins) if (re?.test(`${pin.title} ${pin.text}`)) pin.screens.push(s.id);
       return { id: s.id, name: s.name, phase: s.phase, component: s.component, branch: !!s.branch, next: s.next ?? [], critic: s.critic ?? null, brief: s.brief ?? null,
-        shot: s.shot, takes: s.takes ?? [], scene: scene ? { id: scene.id, name: scene.name, state: scene.state, note: scene.note } : null,
+        shot: s.shot, takes: s.takes ?? [], frames: s.frames ?? [], scene: scene ? { id: scene.id, name: scene.name, state: scene.state, note: scene.note } : null,
         code: g.map(({ repo, gh, missing, files, commits }) => ({ repo, gh, missing: !!missing, files: files ?? 0, commits: commits?.length ?? 0 })),
         commits: g.flatMap((x) => (x.commits ?? []).map((c) => ({ ...c, repo: x.repo, gh: x.gh }))).sort((a, b) => b.t - a.t).slice(0, 40),
         colors: merge("colors", 10), fonts: merge("fonts", 5), libs: merge("libs", 10),

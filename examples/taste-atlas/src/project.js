@@ -12,8 +12,8 @@ const SCENE = { live: "#1f8a5b", still: "#c27c0e", fix: "#d6453d" };
 const FW = 12; // frame width in world units; the camera zooms to it
 
 // Rows of screens in journey order, as many per row as frames the viewport best (aspect = free width / height).
-export function grid(n, [fw, fh], aspect) {
-  const w = FW, h = (FW * fh) / fw, gx = w * 0.5, gy = w * 0.8; // gy: room for two label lines under a frame and a phase name over the next
+export function grid(n, [fw, fh], aspect, strip = false) {
+  const w = FW, h = (FW * fh) / fw, gx = w * 0.5, gy = w * 0.8 + (strip ? h * 0.55 : 0); // gy: two label lines + a phase name, plus the frames strip when a screen has frames
   let best = null;
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols), gw = cols * w + (cols - 1) * gx, gh = rows * h + rows * gy, k = Math.min(aspect / gw, 1 / gh);
@@ -36,7 +36,7 @@ export function createProject(W, { P, C }) {
     .then((d) => { if (d?.screens?.length) data.set(pid, d); });
 
   function layout(o, aspect) {
-    G = grid(D.screens.length, D.frame ?? [16, 10], aspect); frames = new Map();
+    G = grid(D.screens.length, D.frame ?? [16, 10], aspect, D.screens.some((s) => s.frames?.length)); frames = new Map();
     const x0 = o.x - G.gw / 2, y0 = o.y - G.gh / 2 + G.gy;
     D.screens.forEach((s, i) => frames.set(s.id, { s, i, x: x0 + (i % G.cols) * (G.w + G.gx), y: y0 + Math.floor(i / G.cols) * (G.h + G.gy), w: G.w, h: G.h }));
     const nb = neighbours(W, D.id).filter((n) => P.has(n.id)), gr = G.w * 0.62, gx = x0 + G.gw + G.gx * 2.2 + gr;
@@ -88,6 +88,20 @@ export function createProject(W, { P, C }) {
       text(`${String(f.i + 1).padStart(2, "0")}  ${s.name}`, x, y + h + lw(15), 12, ink, { weight: 600, align: "left", max: w + G.gx * 0.8 });
       const n = s.critic?.issues?.length;
       if (px(w) > 60) text(`${n ? `${n} issue${n > 1 ? "s" : ""} · ` : ""}${s.commits.length} commits · ${s.asksTotal} asks`, x, y + h + lw(29), 10, mute, { align: "left", font: mono, max: w + G.gx * 0.8 });
+      // Relevant frames (screen.frames): hidden when the board is far, then a strip under the screen whose count grows
+      // with zoom: 2 when it is a thumbnail, all of them once the screen fills a good part of the view. The board reads
+      // as a contextual map: far = the journey, near = each beat's frames.
+      const fr = s.frames ?? [], room = px(w);
+      if (fr.length && room > 90) {
+        const n = Math.min(fr.length, room > 520 ? fr.length : room > 300 ? 6 : room > 180 ? 4 : 2), cols = Math.min(n, 4), gap = w * 0.02;
+        const fw = (w - gap * (cols - 1)) / cols, fh = fw * (h / w), y0 = y + h + lw(36);
+        for (let j = 0; j < n; j++) {
+          const fx = x + (j % cols) * (fw + gap), fy = y0 + Math.floor(j / cols) * (fh + gap), im = img(src(fr[j]));
+          ctx.globalAlpha = lit && !lit.has(s.id) ? 0.35 : 1; ctx.fillStyle = dark ? "#22282b" : "#e4e0d6"; ctx.fillRect(fx, fy, fw, fh);
+          if (im) { const k = Math.max(fw / im.width, fh / im.height), dw = im.width * k, dh = im.height * k; ctx.save(); ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip(); ctx.drawImage(im, fx + (fw - dw) / 2, fy + (fh - dh) / 2, dw, dh); ctx.restore(); }
+        }
+        ctx.globalAlpha = 1;
+      }
       const tag = v ?? s.scene?.state;
       if (tag && px(w) > 40) { const tw = lw(tag.length * 7.5 + 12), th = lw(17); ctx.fillStyle = vc; ctx.fillRect(x + lw(4), y + lw(4), tw, th); text(tag, x + lw(4) + tw / 2, y + lw(4) + th * 0.72, 11, "#fff", { weight: 600, font: mono }); }
     }
@@ -120,6 +134,7 @@ export function createProject(W, { P, C }) {
       ${bf ? `<div class="pj-brief">${bf.lede ? `<p class="pj-goal">${esc(bf.lede)}</p>` : ""}${bf.facts?.length ? `<ul>${bf.facts.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${bf.links?.length ? `<p class="pj-flow">${bf.links.map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</p>` : ""}</div>` : ""}
       ${s.scene ? `<p class="pj-scene"><em style="--c:${SCENE[s.scene.state] ?? "#8a857a"}">${esc(s.scene.state)}</em> film beat “${esc(s.scene.name)}” · ${esc(s.scene.note)}</p>` : ""}
       <img class="pj-hero" src="${esc(src(s.shot))}" alt="" />
+      ${s.frames?.length ? `<div class="pj-k">Storyboard · ${s.frames.length} frames</div><div class="pj-takes pj-frames">${s.frames.map((x, j) => `<figure><img data-take="${esc(src(x))}" src="${esc(src(x))}" alt="" /><figcaption>${j + 1}</figcaption></figure>`).join("")}</div>` : ""}
       ${shots.length > 1 ? `<div class="pj-k">Takes over time · ${shots.length}</div><div class="pj-takes">${shots.map((x, j) => `<figure><img data-take="${esc(src(x))}" class="${j ? "" : "on"}" src="${esc(src(x))}" alt="" /><figcaption>${j ? esc(x.split("/").at(-1).replace(/\.\w+$/, "")) : "current"}</figcaption></figure>`).join("")}</div>` : ""}
       <p class="pj-flow">${from.length ? `from ${from.map((x) => `<a href="#" data-pjscreen="${esc(x.id)}">${esc(x.name)}</a>`).join(", ")}` : "start of the journey"}${next.length ? ` · next ${next.map(([x, why]) => `<a href="#" data-pjscreen="${esc(x.id)}">${esc(x.name)}</a> <small>(${esc(why)})</small>`).join(", ")}` : ""}</p>
       ${pins.length ? `<div class="pj-k">Inspo pinned on the board · ${pins.length}</div><div class="pj-inspo">${pins.map((x) => `<a href="${esc(x.url ?? "#")}" target="_blank" rel="noopener" title="${esc(x.title)}">${x.image ? `<img src="${esc(x.image)}" alt="" />` : ""}<span>${esc(x.title || x.source)}</span></a>`).join("")}</div>` : ""}

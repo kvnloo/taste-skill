@@ -48,9 +48,37 @@ ok(!s.focus && s.graph > 0.9 && s.tiles > 0.9, "Esc again: the whole atlas retur
 await go(p, "#work:glide@council"); s = await look(p);
 ok(s.pj.ghosts.length >= 1 && s.pj.ghosts.length <= 2, `glide: ${s.pj.ghosts.length} greyed connected node(s): ${s.pj.ghosts}`);
 ok(s.pj.sel === "council", "deep link #work:glide@council opens that screen");
+// Slides: the floating player bar's Next walks the journey in order, arrow keys too, and the hero opens a swipeable viewer.
+await go(p, "#work:glide"); s = await look(p); const ids = s.pj.frames.map((x) => x.id), n = ids.length;
+const cap = () => p.evaluate(() => document.querySelector(".deckview.on .dv-cap")?.innerText ?? null);
+const tag = (i) => `${String(i + 1).padStart(2, "0")} / ${n}`;
+await p.click(".pj-deckbar [data-pjstep='1']"); await p.waitForTimeout(900); s = await look(p);
+ok(s.pj.sel === ids[0] && (await p.innerText(".pj-deckbar")).includes(tag(0)), `Start opens slide 1 (${s.pj.sel}, bar ${tag(0)})`);
+await p.click(".pj-deckbar [data-pjstep='1']"); await p.waitForTimeout(900); s = await look(p);
+ok(s.pj.sel === ids[1] && (await p.innerText(".pj-deckbar")).includes(tag(1)), `Next opens slide 2 (${s.pj.sel})`);
+await p.keyboard.press("ArrowRight"); await p.waitForTimeout(900); s = await look(p);
+ok(s.pj.sel === ids[2], `ArrowRight opens slide 3 (${s.pj.sel})`);
+await p.keyboard.press("ArrowLeft"); await p.waitForTimeout(900); s = await look(p);
+ok(s.pj.sel === ids[1], `ArrowLeft goes back to slide 2 (${s.pj.sel})`);
+await p.click(".pj-hero"); await p.waitForTimeout(300); await p.screenshot({ path: `${out}/deck-viewer.png` });
+ok((await cap())?.startsWith(tag(1)), `tapping the slide opens the viewer on it (${await cap()})`);
+await p.mouse.move(1000, 450); await p.mouse.down(); await p.mouse.move(600, 470, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(500);
+s = await look(p); ok((await cap())?.startsWith(tag(2)) && s.pj.sel === ids[2], `swipe left: next slide, shelf follows (${await cap()}, ${s.pj.sel})`);
+await p.mouse.move(400, 450); await p.mouse.down(); await p.mouse.move(800, 440, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(500);
+ok((await cap())?.startsWith(tag(1)), `swipe right: previous slide (${await cap()})`);
+await p.mouse.move(700, 300); await p.mouse.down(); await p.mouse.move(720, 700, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(400);
+ok((await cap())?.startsWith(tag(1)), "a vertical drag does not change the slide");
+await p.click(".deckview .dv-nav.next"); await p.waitForTimeout(400); ok((await cap())?.startsWith(tag(2)), "the viewer's › button goes forward");
+await p.keyboard.press("Escape"); await p.waitForTimeout(400); s = await look(p);
+ok(!(await cap()) && s.focus && s.pj.sel === ids[2], `Esc closes the viewer and keeps the slide (${s.pj.sel})`);
 // Phone.
 const m = await page(390, 844); await go(m, "#work:fframestudio"); s = await look(m); await m.screenshot({ path: `${out}/pj-phone.png` });
 ok(s.focus && s.pj.frames.length === 17, "phone: project focus opens");
+await m.click(".pj-deckbar [data-pjstep='1']"); await m.waitForTimeout(900); s = await look(m);
+ok(s.pj.sel, `phone: the player bar's Next is on screen and opens a slide (${s.pj.sel})`);
+const fr = s.pj.frames.find((x) => x.id === s.pj.sel); await m.mouse.click(fr.x + fr.w / 2, fr.y + fr.h / 2); await m.waitForTimeout(500);
+ok(await m.evaluate(() => !!document.querySelector(".deckview.on img")), "phone: tapping the open slide on the canvas shows it full screen");
+await m.screenshot({ path: `${out}/deck-phone-viewer.png` });
 ok(!errs.length, `no page errors${errs.length ? ": " + errs.slice(0, 3).join(" | ") : ""}`);
 await b.close();
 console.log(bad.length ? `${bad.length} failed` : "all passed"); process.exit(bad.length ? 1 : 0);

@@ -281,3 +281,25 @@ body.ctx-open .layers { bottom: 198px; } body.ctx-open .legend { bottom: 190px; 
 .ctxpane .cp-row i { position: absolute; top: 5px; right: 5px; font-style: normal; font-size: 9px; color: #fff; background: rgba(0,0,0,.6); border-radius: 50%; width: 18px; height: 18px; display: grid; place-items: center; }
 @media (max-width: 700px) { .ctxpane, .ctxchip { display: none !important; } }
 .pj-frames { display: grid !important; grid-template-columns: repeat(4, 1fr); gap: 6px; } .pj-frames figure { margin: 0; } .pj-frames img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; }
+
+/* Slides: the shelf's prev / next bar and the full-screen viewer (src/deck.js). */
+.pj-deckbar { position: fixed; left: 18px; bottom: 18px; z-index: 20; }
+.pj-deckbar:empty { display: none; }
+.pj-deck { display: flex; align-items: center; gap: 8px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.pj-deck span { min-width: 74px; text-align: center; font: 600 11px "IBM Plex Mono", monospace; letter-spacing: .06em; color: var(--mute); }
+.pj-deck button { min-height: 44px; min-width: 92px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+.pj-deck button:last-child { background: #2f6fd6; border-color: #2f6fd6; color: #fff; }
+.pj-deck button:disabled { opacity: .35; cursor: default; }
+@media (max-width: 700px) { .pj-deckbar { left: 50%; bottom: auto; top: 112px; translate: -50% 0; } }
+.shelf .grid .pj-hero[data-pjview] { cursor: zoom-in; }
+.deckview { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; background: rgba(8,8,10,.94); touch-action: none; user-select: none; }
+.deckview.on { display: grid; }
+.deckview img { max-width: 96vw; max-height: 84vh; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.deckview button { position: absolute; border: 0; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; border-radius: 999px; }
+.deckview .dv-x { top: 14px; right: 14px; width: 44px; height: 44px; font-size: 24px; }
+.deckview .dv-nav { top: 50%; translate: 0 -50%; width: 56px; height: 56px; font-size: 30px; }
+.deckview .prev { left: 14px; } .deckview .next { right: 14px; }
+.deckview .dv-nav:disabled { opacity: .2; cursor: default; }
+.deckview .dv-cap { position: absolute; bottom: 14px; left: 0; right: 0; margin: 0; text-align: center; color: #ddd; font-size: 13px; }
+.deckview .dv-cap b { font: 600 12px "IBM Plex Mono", monospace; margin-right: 8px; color: #fff; }
+@media (max-width: 700px) { .deckview .dv-nav { top: auto; bottom: 48px; translate: none; } }

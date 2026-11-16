@@ -5,6 +5,7 @@
 // work node from its detail view ("Link to work…"), saved in data/work-links.json and tethered to its tile on the ring.
 import { packCircles, fitInCircle, weightAt, ago } from "./pack.js";
 import { createProject } from "./project.js";
+import { mountDeck, haptic } from "./deck.js";
 
 const R = 250; // world radius of the disc inside the operation ring (operations sit at r = 320)
 const ST = { "on-track": ["On track", "#1f8a5b", "#3fbf84"], watch: ["Watch", "#c27c0e", "#e0a43a"], "at-risk": ["At risk", "#d6453d", "#ef6a5f"], blocked: ["Blocked", "#7b3fa0", "#b07ad6"], unknown: ["Unknown", "#8a857a", "#8f8a80"] };
@@ -208,9 +209,9 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   A.workAt = (e) => {
     if (!on()) return false;
     const [wx, wy] = toWorld(e.clientX, e.clientY);
-    if (pj.on()) { // a screen opens its story; a greyed neighbour opens that project; empty space steps out
+    if (pj.on()) { // a screen opens its story (tap it again: full screen); a greyed neighbour opens that project; empty space steps out
       const h = pj.hit(wx, wy);
-      if (h?.startsWith("screen:")) pick(h.slice(7) === pj.sel() ? null : h.slice(7)); else if (h) focusOn(h.slice(6)); else if (pj.sel()) pick(null); else focusOn(null);
+      if (h?.startsWith("screen:")) h.slice(7) === pj.sel() ? deck.open() : pick(h.slice(7)); else if (h) focusOn(h.slice(6)); else if (pj.sel()) pick(null); else focusOn(null);
       return true;
     }
     if (Math.hypot(wx, wy) > R + 10) return false;
@@ -250,10 +251,15 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   const blur = () => { if (focus === undefined) return; focus = undefined; dirty++; leave(); bm?.setCustom(null); };
   // Project focus: pick a screen (or none: the whole journey), fill the shelf, then fly clear of it.
   function pick(sid, ms = 600) {
-    const b = pj.pick(sid); dirty++; bm?.setCustom(pj.shelf()); fly(b, ms, 24, true);
+    const b = pj.pick(sid); dirty++; bm?.setCustom(pj.shelf()); fly(b, ms, 24, true); bar.innerHTML = pj.bar();
     history.replaceState(null, "", location.pathname + location.search + `#work:${pj.id()}${pj.sel() ? "@" + pj.sel() : ""}`);
   }
-  function leave() { if (!pj.on()) return; pj.exit(); dirty++; document.body.classList.remove("project-focus"); }
+  // The player bar: always on screen in project focus, like the music app's next track.
+  const bar = document.createElement("div"); bar.className = "pj-deckbar"; document.body.appendChild(bar);
+  // Next / previous slide (player bar, arrow keys, the viewer's swipe); returns the slide now shown.
+  const stepTo = (d) => { const id = pj.step(d); if (id !== pj.sel()) pick(id); return pj.slide(); };
+  const deck = mountDeck({ step: stepTo, slide: pj.slide });
+  function leave() { if (!pj.on()) return; pj.exit(); dirty++; document.body.classList.remove("project-focus"); bar.innerHTML = ""; }
   addEventListener("resize", () => { if (pj.on()) { pj.relayout(aspect()); dirty++; A.refit(0); } });
 
   // Proof lightbox (depth 3): text lives only here.
@@ -328,10 +334,18 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     const u = e.target.closest?.("[data-wunlink]"); if (u) { e.preventDefault(); save(u.dataset.item, u.dataset.wunlink, "remove"); return; }
     const g = e.target.closest?.("[data-wgo]"); if (g) { e.preventDefault(); document.querySelector(".lightbox.on .lb-x")?.click(); close(); focusOn(g.dataset.wgo); return; }
     const ps = e.target.closest?.("[data-pjscreen]"); if (ps && pj.on()) { e.preventDefault(); pick(ps.dataset.pjscreen || null); return; }
+    const st = e.target.closest?.("[data-pjstep]"); if (st && pj.on()) { haptic(); stepTo(+st.dataset.pjstep); return; }
+    if (e.target.closest?.("[data-pjview]") && pj.on()) { deck.open(); return; }
     const tk = e.target.closest?.("[data-take]"); if (tk) { const hero = document.querySelector(".pj-hero"); if (hero) hero.src = tk.dataset.take; document.querySelectorAll("[data-take]").forEach((x) => x.classList.toggle("on", x === tk)); return; }
     const pg = e.target.closest?.("[data-wpage]"); if (pg) { e.preventDefault(); const [cid, i] = pg.dataset.wpage.split("|"); openPage(C.get(cid), +i); return; }
     const pf = e.target.closest?.("[data-wproof]"); if (pf) { proof(pf.dataset.wproof); return; }
     const wp = e.target.closest?.("[data-wpost]"); if (wp) { close(); bm?.detail(post(wp.dataset.wpost)); }
+  });
+  // Arrow keys page through a project's slides when nothing else is open.
+  addEventListener("keydown", (e) => {
+    const d = { ArrowRight: 1, PageDown: 1, ArrowLeft: -1, PageUp: -1 }[e.key];
+    if (!d || !pj.on() || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || document.querySelector(".lightbox.on")) return;
+    e.preventDefault(); stepTo(d);
   });
   // Esc steps out one level: lightbox → component → product → portfolio → the atlas.
   addEventListener("keydown", (e) => {

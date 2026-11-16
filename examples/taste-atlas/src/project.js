@@ -11,6 +11,15 @@ export const VERDICT = { works: "#1f8a5b", rough: "#c27c0e", broken: "#d6453d" }
 const SCENE = { live: "#1f8a5b", still: "#c27c0e", fix: "#d6453d" };
 const FW = 12; // frame width in world units; the camera zooms to it
 
+// Deck order, like a player queue: from the journey (null) Next opens screen 1, Prev from screen 1 returns to the
+// journey, and Next on the last screen stays put (its button is disabled).
+export function stepId(ids, sel, d) {
+  const i = ids.indexOf(sel), j = i < 0 ? (d > 0 ? 0 : -1) : i + d;
+  return j < 0 ? null : ids[Math.min(j, ids.length - 1)] ?? null;
+}
+// The prev · n of N · next bar that floats over the canvas in project focus (i = -1 on the journey).
+export const deckBar = (i, n) => `<nav class="pj-deck" aria-label="Slides"><button data-pjstep="-1"${i < 0 ? " disabled" : ""} aria-label="Previous slide">‹ ${i > 0 ? "Prev" : "Journey"}</button><span>${i < 0 ? `${n} slides` : `${String(i + 1).padStart(2, "0")} / ${n}`}</span><button data-pjstep="1"${i >= n - 1 ? " disabled" : ""} aria-label="Next slide">${i < 0 ? "Start" : "Next"} ›</button></nav>`;
+
 // Rows of screens in journey order, as many per row as frames the viewport best (aspect = free width / height).
 export function grid(n, [fw, fh], aspect, strip = false) {
   const w = FW, h = (FW * fh) / fw, gx = w * 0.5, gy = w * 0.8 + (strip ? h * 0.55 : 0); // gy: two label lines + a phase name, plus the frames strip when a screen has frames
@@ -133,7 +142,7 @@ export function createProject(W, { P, C }) {
         <ul>${cr.issues.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p><b>Fix</b> ${esc(cr.fix)}</p></div>` : ""}
       ${bf ? `<div class="pj-brief">${bf.lede ? `<p class="pj-goal">${esc(bf.lede)}</p>` : ""}${bf.facts?.length ? `<ul>${bf.facts.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${bf.links?.length ? `<p class="pj-flow">${bf.links.map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</p>` : ""}</div>` : ""}
       ${s.scene ? `<p class="pj-scene"><em style="--c:${SCENE[s.scene.state] ?? "#8a857a"}">${esc(s.scene.state)}</em> film beat “${esc(s.scene.name)}” · ${esc(s.scene.note)}</p>` : ""}
-      <img class="pj-hero" src="${esc(src(s.shot))}" alt="" />
+      <img class="pj-hero" data-pjview src="${esc(src(s.shot))}" alt="Open ${esc(s.name)} full screen" title="Tap to view full screen; swipe for the next slide" />
       ${s.frames?.length ? `<div class="pj-k">Storyboard · ${s.frames.length} frames</div><div class="pj-takes pj-frames">${s.frames.map((x, j) => `<figure><img data-take="${esc(src(x))}" src="${esc(src(x))}" alt="" /><figcaption>${j + 1}</figcaption></figure>`).join("")}</div>` : ""}
       ${shots.length > 1 ? `<div class="pj-k">Takes over time · ${shots.length}</div><div class="pj-takes">${shots.map((x, j) => `<figure><img data-take="${esc(src(x))}" class="${j ? "" : "on"}" src="${esc(src(x))}" alt="" /><figcaption>${j ? esc(x.split("/").at(-1).replace(/\.\w+$/, "")) : "current"}</figcaption></figure>`).join("")}</div>` : ""}
       <p class="pj-flow">${from.length ? `from ${from.map((x) => `<a href="#" data-pjscreen="${esc(x.id)}">${esc(x.name)}</a>`).join(", ")}` : "start of the journey"}${next.length ? ` · next ${next.map(([x, why]) => `<a href="#" data-pjscreen="${esc(x.id)}">${esc(x.name)}</a> <small>(${esc(why)})</small>`).join(", ")}` : ""}</p>
@@ -158,6 +167,10 @@ export function createProject(W, { P, C }) {
     relayout: (aspect) => { if (D) layout(anchor, aspect); return box; },
     exit() { D = null; sel = null; frames = new Map(); ghosts = []; },
     pick(id) { sel = id && frames.has(id) ? id : null; const f = sel && frames.get(sel); return f ? [f.x - G.gx * 0.6, f.y - G.gy * 0.9, f.x + f.w + G.gx * 0.6, f.y + f.h + G.gy * 0.9] : box; },
+    step: (d) => stepId(D?.screens.map((x) => x.id) ?? [], sel, d),
+    // The selected slide for the full-screen viewer.
+    bar: () => (D ? deckBar(sel ? frames.get(sel).i : -1, D.screens.length) : ""),
+    slide: () => { const f = sel && frames.get(sel); return f ? { id: sel, i: f.i, n: D.screens.length, name: f.s.name, shot: src(f.s.shot) } : null; },
     box: () => box, paint, hit, shelf,
     state: () => ({ open: D?.id ?? null, sel, screens: D?.screens.length ?? 0, cols: G?.cols ?? 0, frames: [...frames.values()].map((f) => ({ id: f.s.id, x: f.x, y: f.y, w: f.w, h: f.h, verdict: f.s.critic?.verdict ?? null })), ghosts: ghosts.map((g) => g.id), box }),
   };

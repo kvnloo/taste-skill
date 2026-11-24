@@ -253,8 +253,10 @@ body.project-focus #atlas { cursor: default; }
 body.lens .node.execution { opacity: .12; }
 body.lens .node.technique, body.lens .node.domain { opacity: .55; }
 body.lens .node.on { opacity: 1; }
-body.lens .shelf .chips { display: none; }
-body.lens .shelf.open:not(.wide) { width: min(560px, 44vw); }
+body.lens .shelf .chips, body.lens .shelf footer { display: none; } /* the footer is the labeller's method note: not the project's */
+/* Desktop only: on a phone the lens shelf is the full-width bottom sheet. Unscoped, this width beat the phone sheet's
+   width:auto and squeezed the project panel into a 44vw (172 px) column with one word per line. */
+@media (min-width: 701px) { body.lens .shelf.open:not(.wide) { width: min(560px, 44vw); } }
 .ln-list small { font-size: 10.5px; }
 /* First run (src/main.js): no personal data yet. */
 .first-run { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 30; padding: 10px 16px; border-radius: 99px; background: var(--ink); color: var(--bg); font: 13px Inter, system-ui, sans-serif; text-decoration: none; box-shadow: 0 6px 24px rgba(0,0,0,.18); white-space: nowrap; }
@@ -267,7 +269,7 @@ body.lens .shelf.open:not(.wide) { width: min(560px, 44vw); }
 .ctxpane { display: none; position: fixed; left: 18px; right: 82px; bottom: 14px; height: 172px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.08); flex-direction: column; overflow: hidden; z-index: 4; }
 .ctxpane.open { display: flex; }
 .shelf.open ~ .ctxpane { right: calc(min(440px, 42vw) + 30px); }
-body.lens .shelf.open ~ .ctxpane { right: calc(min(560px, 44vw) + 30px); }
+@media (min-width: 701px) { body.lens .shelf.open ~ .ctxpane { right: calc(min(560px, 44vw) + 30px); } }
 .shelf.wide ~ .ctxpane { display: none; }
 body.ctx-open .layers { bottom: 198px; } body.ctx-open .legend { bottom: 190px; opacity: 0; pointer-events: none; } body.ctx-open .hint { display: none; }
 .ctxpane header { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px 6px; font: 12px Inter, sans-serif; }

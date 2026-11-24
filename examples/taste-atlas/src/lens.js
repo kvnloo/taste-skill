@@ -66,9 +66,14 @@ export async function mountLens(A, { bm, fly }) {
     ].join("");
     // On its own atlas everything on the canvas is the project's context: nothing greys out, the shelf lists the skills.
     if (p.atlas) { const own = bm.items.filter((b) => b.layer === "skill").sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); return bm.setCustom({ title: p.name, kind: "PROJECT", ids: null, items: own, n: own.length, html }); }
-    const box = bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n: posts.size + cards.length, html, pack: true });
+    // Header count: what the panel holds. A bare "0" read as "nothing here" on projects with screens but no linked posts.
+    const refs = posts.size + cards.length, nScreens = J?.screens.length ?? 0, n = [nScreens && `${nScreens} screens`, refs && `${refs} refs`].filter(Boolean).join(" · ") || "0";
+    const box = bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n, html, pack: true });
     const ts = [...posts.keys(), ...near].map((i) => bm.tileOf(i)).filter(Boolean);
-    if (box) setTimeout(() => fly(box, 900, 6, true), 280); // after the shelf's .25s width transition, so the fit sees the final free area else if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
+    // After the shelf's .25s width transition, so the fit sees the final free area. (The else branch used to sit inside
+    // this comment, so a lens without a packed block never flew to its posts.)
+    if (box) setTimeout(() => fly(box, 900, 6, true), 280);
+    else if (ts.length) fly(ts.reduce((m, t) => [Math.min(m[0], t.x - 30), Math.min(m[1], t.y - 30), Math.max(m[2], t.x + 30), Math.max(m[3], t.y + 30)], [Infinity, Infinity, -Infinity, -Infinity]), 900, 6);
   }
   sel.addEventListener("change", () => show(sel.value));
   const fromHash = (h = location.hash) => { const m = /^#project:(.+)$/.exec(h); if (m && m[1] !== cur) show(decodeURIComponent(m[1])); };

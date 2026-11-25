@@ -12,10 +12,11 @@ const SCENE = { live: "#1f8a5b", still: "#c27c0e", fix: "#d6453d" };
 const FW = 12; // frame width in world units; the camera zooms to it
 
 // Rows of screens in journey order, as many per row as frames the viewport best (aspect = free width / height).
-export function grid(n, [fw, fh], aspect, strip = false) {
+// maxCols caps the row length: a phone shows 2-3 frames per row so each one is big enough to read.
+export function grid(n, [fw, fh], aspect, strip = false, maxCols = n) {
   const w = FW, h = (FW * fh) / fw, gx = w * 0.5, gy = w * 0.8 + (strip ? h * 0.55 : 0); // gy: two label lines + a phase name, plus the frames strip when a screen has frames
   let best = null;
-  for (let cols = 1; cols <= n; cols++) {
+  for (let cols = 1; cols <= Math.max(1, Math.min(n, maxCols)); cols++) {
     const rows = Math.ceil(n / cols), gw = cols * w + (cols - 1) * gx, gh = rows * h + rows * gy, k = Math.min(aspect / gw, 1 / gh);
     if (!best || k > best.k + 1e-9) best = { k, cols, rows, gw, gh };
   }
@@ -31,18 +32,28 @@ export function neighbours(W, pid) {
 
 export function createProject(W, { P, C }) {
   const data = new Map();
-  let D = null, sel = null, G = null, frames = new Map(), ghosts = [], box = null, anchor = null;
+  let D = null, sel = null, G = null, frames = new Map(), ghosts = [], box = null, home = null, anchor = null;
+  const phone = () => innerWidth <= 700;
   const load = (pid) => fetch(`./data/project.${encodeURIComponent(pid)}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((d) => { if (d?.screens?.length) data.set(pid, d); });
 
   function layout(o, aspect) {
-    G = grid(D.screens.length, D.frame ?? [16, 10], aspect, D.screens.some((s) => s.frames?.length)); frames = new Map();
+    const fr = D.frame ?? [16, 10];
+    G = grid(D.screens.length, fr, aspect, D.screens.some((s) => s.frames?.length), phone() ? (fr[1] > fr[0] ? 3 : 2) : D.screens.length); frames = new Map();
     const x0 = o.x - G.gw / 2, y0 = o.y - G.gh / 2 + G.gy;
     D.screens.forEach((s, i) => frames.set(s.id, { s, i, x: x0 + (i % G.cols) * (G.w + G.gx), y: y0 + Math.floor(i / G.cols) * (G.h + G.gy), w: G.w, h: G.h }));
     const nb = neighbours(W, D.id).filter((n) => P.has(n.id)), gr = G.w * 0.62, gx = x0 + G.gw + G.gx * 2.2 + gr;
     ghosts = nb.map((n, i) => ({ ...n, p: P.get(n.id), x: gx, y: o.y - ((nb.length - 1) / 2 - i) * gr * 2.8, r: gr,
       to: [...frames.values()].filter((f) => n.shared.has(`${D.id}/${f.s.component}`)).slice(0, 4) }));
     box = [x0 - G.gx * 0.5, y0 - G.gy, x0 + G.gw + (ghosts.length ? G.gx * 2.2 + gr * 2.2 : G.gx * 0.5), y0 + G.gh - G.gy * 0.4];
+    // Home camera: on a phone the whole journey at once is a wall of stamps ("CARDS I…"), so the first view frames the
+    // first two rows; pinch out (or the shelf's journey list) reaches the rest. Desktop keeps the whole journey.
+    // Its height matches the phone's free area (below the search bar, above the closed sheet), so the fit is
+    // width-bound and the first row sits at the top instead of floating mid-screen.
+    if (phone() && G.rows > 2) {
+      const hx0 = x0 - G.gx * 0.5, hx1 = x0 + G.gw + G.gx * 0.5, hy0 = y0 - G.w * 0.5, ra = innerWidth / Math.max(160, innerHeight - 106 - 58);
+      home = [hx0, hy0, hx1, Math.min(box[3], Math.max(y0 + 2 * (G.h + G.gy) - G.gy * 0.4, hy0 + (hx1 - hx0) / ra))];
+    } else home = box;
   }
 
   function paint(ctx, { text, img, lw, dark, ink, mute, bg, px, hover }) {
@@ -157,8 +168,8 @@ export function createProject(W, { P, C }) {
     enter(pid, o, aspect) { if (D?.id !== pid) sel = null; D = data.get(pid); anchor = o; layout(o, aspect); return box; },
     relayout: (aspect) => { if (D) layout(anchor, aspect); return box; },
     exit() { D = null; sel = null; frames = new Map(); ghosts = []; },
-    pick(id) { sel = id && frames.has(id) ? id : null; const f = sel && frames.get(sel); return f ? [f.x - G.gx * 0.6, f.y - G.gy * 0.9, f.x + f.w + G.gx * 0.6, f.y + f.h + G.gy * 0.9] : box; },
+    pick(id) { sel = id && frames.has(id) ? id : null; const f = sel && frames.get(sel); return f ? [f.x - G.gx * 0.6, f.y - G.gy * 0.9, f.x + f.w + G.gx * 0.6, f.y + f.h + G.gy * 0.9] : home ?? box; },
     box: () => box, paint, hit, shelf,
-    state: () => ({ open: D?.id ?? null, sel, screens: D?.screens.length ?? 0, cols: G?.cols ?? 0, frames: [...frames.values()].map((f) => ({ id: f.s.id, x: f.x, y: f.y, w: f.w, h: f.h, verdict: f.s.critic?.verdict ?? null })), ghosts: ghosts.map((g) => g.id), box }),
+    state: () => ({ open: D?.id ?? null, sel, screens: D?.screens.length ?? 0, cols: G?.cols ?? 0, frames: [...frames.values()].map((f) => ({ id: f.s.id, x: f.x, y: f.y, w: f.w, h: f.h, verdict: f.s.critic?.verdict ?? null })), ghosts: ghosts.map((g) => g.id), box, home }),
   };
 }

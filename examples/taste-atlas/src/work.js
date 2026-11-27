@@ -4,7 +4,7 @@
 // A component shared by two products is drawn once; the other product shows a dashed portal to it. Any post links to a
 // work node from its detail view ("Link to work…"), saved in data/work-links.json and tethered to its tile on the ring.
 import { packCircles, fitInCircle, weightAt, ago } from "./pack.js";
-import { createProject } from "./project.js";
+import { createProject, neighbours } from "./project.js";
 import { mountDeck, haptic } from "./deck.js";
 
 const R = 250; // world radius of the disc inside the operation ring (operations sit at r = 320)
@@ -16,12 +16,16 @@ const get = (f) => fetch(f, { cache: "no-store" }).then((r) => (r.ok ? r.json() 
 const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2);
 const now = () => Date.now() / 1000;
 const stale = (s) => !s?.checked || now() - s.checked > s.window;
+// Pages a trace knows about but nobody screenshotted (scripts/entities.mjs: state "listed") draw as labelled cards.
+const listed = (pg) => pg.state === "listed" && !pg.shot, KIND = { site: "SITE", page: "PAGE", film: "▶ FILM" };
+const pageCard = (pg) => `<div class="txt">${listed(pg) ? `<small>${KIND[pg.kind] ?? "PAGE"}</small><br>${esc(pg.name)}` : `${esc(pg.name)}<br><b>down</b> · ${esc(pg.code)}`}</div>`;
 const fresh = (s) => (s?.checked ? `${stale(s) ? "stale · " : ""}checked ${ago(s.checked, now())} ago` : "never checked");
 
 export async function mountWork(A, { bm, fly, start = "" }) {
   const W = await get("./data/work.atlas.json"); if (!W?.products?.length) return null;
   let links = (await get("./data/work-links.json"))?.links ?? [];
   const P = new Map(W.products.map((p) => [p.id, p])), C = new Map(W.components.map((c) => [c.id, c]));
+  const isTraced = (n) => !!n?.traced; // from scripts/entities.mjs: a trace, so no git touches or CI to show
   const name = (id) => (C.has(id) ? `${P.get(C.get(id).product).name} · ${C.get(id).name}` : P.get(id)?.name ?? id);
   const hidden = bm?.hidden ?? new Set(), on = () => !hidden.has("work"), post = (id) => bm?.byId.get(id) ?? null;
   const col = (s, dark) => (stale(s) ? ST.unknown : ST[s?.value] ?? ST.unknown)[dark ? 2 : 1];
@@ -87,6 +91,19 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     }
     ctx.font = `${weight} ${px / sc}px ${font}`; ctx.textAlign = align; ctx.fillStyle = c; ctx.fillText(t, x, y);
   };
+  // A label that does not fit on one line takes two (split at the word nearest the middle); the last line sits on y and
+  // the first goes above it, and the second truncates. Phones showed "Acme & …" where two lines of the name fit.
+  const text2 = (s, x, y, px, c, o = {}) => {
+    const sc = A.view.cam.s, t = String(s), room = Math.round((o.max * sc) / 4) * 4, k = `2|${t}|${o.weight ?? 500} ${px}|${room}`;
+    if (!fits.has(k)) {
+      ctx.font = `${o.weight ?? 500} ${px}px ${o.font ?? "Inter, sans-serif"}`; const ws = t.split(/\s+/);
+      let best = null; if (ctx.measureText(t).width > room && ws.length > 1) for (let i = 1; i < ws.length; i++) { const a = ws.slice(0, i).join(" "), b = ws.slice(i).join(" "), w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width); if (!best || w < best[2]) best = [a, b, w]; }
+      fits.set(k, best ? [best[0], best[1]] : [t]);
+    }
+    const ls = fits.get(k), lh = (px * 1.15) / sc;
+    ls.forEach((l, i) => text(l, x, o.top ? y + i * lh : y - (ls.length - 1 - i) * lh, px, c, o)); // top: the first line sits on y
+    return ls.length;
+  };
 
   function paint(t) {
     const c = A.view.cam, Wd = innerWidth, Hd = innerHeight, dpr = Math.min(devicePixelRatio || 1, Wd <= 700 ? 1.5 : 2), vis = on(), dark = A.view.theme === "dark";
@@ -126,10 +143,14 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     // The disc itself: a quiet ground so the work reads as one place.
     ctx.fillStyle = dark ? "rgba(255,255,255,.025)" : "rgba(0,0,0,.025)"; ctx.beginPath(); ctx.arc(0, 0, R + 8, 0, 7); ctx.fill();
     if (px(R) > 40 && focus === undefined) text("YOUR WORK", 0, -R - 2, 10, mute, { weight: 500, font: '"IBM Plex Mono", monospace' });
+    // A focused product (or one of its parts) is the lens: the 1–2 products it shares the most parts with stay greyed,
+    // everything else fades back, so its chain reads first.
+    const fp = focus == null ? null : C.has(focus) ? C.get(focus).product : P.has(focus.split(">")[0]) ? focus.split(">")[0] : null;
+    const near = fp ? new Set([fp, ...neighbours(W, fp).map((x) => x.id)]) : null;
     for (const p of W.products) {
       const o = at(p.id, t); if (!seen(o, 20)) continue;
-      const pr = px(o.r), sc = col(p.status, dark), open = pr >= KIDS_PX, f = focus === p.id || hover === p.id;
-      ctx.globalAlpha = 1; ctx.fillStyle = sc + (dark ? "24" : "1a"); ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 7); ctx.fill();
+      const pr = px(o.r), sc = col(p.status, dark), open = pr >= KIDS_PX, f = focus === p.id || hover === p.id, dim = !near || p.id === fp ? 1 : near.has(p.id) ? 0.55 : 0.22;
+      ctx.globalAlpha = dim; ctx.fillStyle = sc + (dark ? "24" : "1a"); ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 7); ctx.fill();
       ctx.setLineDash(stale(p.status) ? [lw(5), lw(4)] : []); ctx.strokeStyle = sc; ctx.lineWidth = lw(f ? 3.5 : 2); ctx.stroke(); ctx.setLineDash([]);
       if (p.deadline) { // deadline arc: the share of the last 72 h still left
         const left = Date.parse(p.deadline) / 1000 - now(), fr = Math.max(0, Math.min(1, left / (72 * 3600)));
@@ -149,7 +170,9 @@ export async function mountWork(A, { bm, fly, start = "" }) {
         const qr = px(q.r), n = C.get(kd.id), hv = hover === kd.key || focus === kd.key;
         if (kd.portal) {
           ctx.setLineDash([lw(4), lw(3)]); ctx.strokeStyle = mute; ctx.lineWidth = lw(hv ? 2.5 : 1.2); ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 7); ctx.stroke(); ctx.setLineDash([]);
-          if (qr >= 14) { text(n.name, q.x, q.y - lw(2), Math.min(13, qr * 0.22), mute, { weight: 600, max: q.r * 1.8 }); text(`in ${P.get(n.product).name} →`, q.x, q.y + lw(11), 10, mute, { max: q.r * 1.8 }); }
+          // A small portal names only where it leads (its part's name would be unreadable); a big one names both.
+          if (qr >= 14 && qr < 44) text2(`${P.get(n.product).name} →`, q.x, q.y + lw(4), Math.min(12, Math.max(9, qr * 0.3)), mute, { weight: 600, max: q.r * 1.8 });
+          else if (qr >= 44) { text2(n.name, q.x, q.y - lw(2), Math.min(13, qr * 0.22), mute, { weight: 600, max: q.r * 1.7 }); text(`in ${P.get(n.product).name} →`, q.x, q.y + lw(11), 10, mute, { max: q.r * 1.8 }); }
           continue;
         }
         const cs = kd.linked ? (dark ? "#9db4ff" : "#2f6fd6") : col(n.status, dark), tiles = qr >= TILES_PX;
@@ -157,7 +180,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
         ctx.setLineDash(!kd.linked && stale(n.status) ? [lw(4), lw(3)] : []); ctx.strokeStyle = cs; ctx.lineWidth = lw(hv ? 3 : 1.5); ctx.stroke(); ctx.setLineDash([]);
         const label = kd.linked ? `Linked · ${extras(p.id).length}` : n.name;
         if (!tiles) {
-          if (qr >= 14) text(label, q.x, q.y + lw(qr >= 40 ? -3 : 4), Math.min(14, Math.max(9, qr * 0.24)), ink, { weight: 600, max: q.r * 1.85 });
+          if (qr >= 14) text2(label, q.x, q.y + lw(qr >= 40 ? -3 : 4), Math.min(14, Math.max(9, qr * 0.24)), ink, { weight: 600, max: q.r * 1.7 });
           if (qr >= 40 && !kd.linked) text(n.also.length ? `also in ${n.also.map((a) => P.get(a)?.name ?? a).join(", ")}` : ST[n.status.value]?.[0] ?? "", q.x, q.y + lw(11), 10, n.also.length ? mute : cs, { max: q.r * 1.8 });
           if (qr >= 70 && !kd.linked) text(fresh(n.status), q.x, q.y + lw(24), 9, stale(n.status) ? ST["at-risk"][dark ? 2 : 1] : mute, { font: '"IBM Plex Mono", monospace', max: q.r * 1.7 });
           continue;
@@ -171,8 +194,13 @@ export async function mountWork(A, { bm, fly, start = "" }) {
           if (tl.kind === "page") {
             const im = tl.pg.shot && tw > 10 ? img("./data/" + tl.pg.shot) : null;
             if (im) cover(im, x, y, w, h);
+            else if (listed(tl.pg)) { // known from a trace, never screenshotted: a labelled card (▶ films), not a failure
+              ctx.strokeStyle = mute; ctx.lineWidth = lw(1); ctx.strokeRect(x, y, w, h);
+              if (tw > 36) text(KIND[tl.pg.kind] ?? "page", x + w / 2, y + h * 0.36, 9, mute, { weight: 600, font: '"IBM Plex Mono", monospace' });
+              if (tw > 36) text2(tl.pg.name, x + w / 2, y + h * 0.36 + lw(15), 11, ink, { weight: 600, max: w - lw(8), top: true });
+            }
             else if (!tl.pg.shot) { ctx.strokeStyle = mute; ctx.lineWidth = lw(1); ctx.setLineDash([lw(3), lw(3)]); ctx.strokeRect(x, y, w, h); ctx.setLineDash([]); if (tw > 50) text("down", x + w / 2, y + h / 2 + lw(4), 11, ST["at-risk"][dark ? 2 : 1], { weight: 600 }); }
-            if (tw > 70) { ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x, y + h - lw(16), w, lw(16)); text(tl.pg.name, x + lw(5), y + h - lw(4.5), 10, "#fff", { align: "left", max: w - lw(10) }); }
+            if (tw > 70 && !(listed(tl.pg) && !im)) { ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x, y + h - lw(16), w, lw(16)); text(tl.pg.name, x + lw(5), y + h - lw(4.5), 10, "#fff", { align: "left", max: w - lw(10) }); }
           } else if (tl.kind === "post") {
             const im = tl.b.thumb && tw > 10 ? img("./data/" + tl.b.thumb) : null;
             if (im) cover(im, x, y, w, h); else if (tw > 40) text(tl.b.title ?? tl.b.author ?? "", x + w / 2, y + h / 2, 10, ink, { max: w - lw(6) });
@@ -243,7 +271,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
     const posts = id == null ? W.products.flatMap((p) => [p.id, ...p.components]).flatMap(extras) : id.endsWith(">linked") ? extras(id.split(">")[0]) : C.has(id) ? extras(id) : [id, ...P.get(id).components].flatMap(extras);
     const pages = nodes.flatMap((c) => c.pages.map((pg, i) => ({ c, pg, i })));
     bm?.setCustom({ title: id == null ? "Your work" : name(id.replace(/>linked$/, "")), items: [...new Map(posts.map((b) => [b.id, b])).values()],
-      n: pages.length + posts.length, html: pages.map(({ c, pg, i }) => `<a href="#" data-wpage="${esc(c.id)}|${i}" title="${esc(pg.name)}">${pg.shot ? `<img loading="lazy" src="./data/${esc(pg.shot)}" alt="" />` : `<div class="txt">${esc(pg.name)}<br><b>down</b> · ${esc(pg.code)}</div>`}<span class="meta"><em style="background:${pg.shot ? ST["on-track"][1] : ST["at-risk"][1]}"></em>${esc(pg.name)} · ${esc(c.name)}</span></a>`).join("") });
+      n: pages.length + posts.length, html: pages.map(({ c, pg, i }) => `<a href="#" data-wpage="${esc(c.id)}|${i}" title="${esc(pg.name)}">${pg.shot ? `<img loading="lazy" src="./data/${esc(pg.shot)}" alt="" />` : pageCard(pg)}<span class="meta"><em style="background:${pg.shot ? ST["on-track"][1] : listed(pg) ? ST.unknown[1] : ST["at-risk"][1]}"></em>${esc(pg.name)} · ${esc(c.name)}</span></a>`).join("") });
     drawHud();
   }
   // After the shelf opens/closes or the window resizes, keep the focused Work node framed (true = handled).
@@ -282,9 +310,10 @@ export async function mountWork(A, { bm, fly, start = "" }) {
       const c = C.get(id), p = P.get(c.product), up = c.pages.filter((x) => x.shot).length;
       show(`<div class="lb-line"><span>${esc(p.name)}</span><span>${esc(c.name)}</span>${c.also.map((a) => `<span>also in <a href="#work:${esc(a)}" data-wgo="${esc(a)}">${esc(P.get(a)?.name ?? a)}</a></span>`).join("")}</div>
         <h3>${esc(c.name)}</h3><p>${pill(c.status)}</p><p class="wk-why">${esc(c.status.why)}</p>
-        ${nums([[c.touches.reduce((a, [, n]) => a + n, 0), `files touched · ${W.windowDays}d`], [c.lastTouched ? ago(c.lastTouched, now()) : "—", "last touch"], [c.prs.filter((x) => x.state === "OPEN").length, "open PRs"], [c.pages.length ? `${up}/${c.pages.length}` : "—", "pages up"]])}
-        ${spark(c.touches)}<p>${ci(c.repos)}</p>${c.metrics.map(([k, v, src]) => `<p class="wk-m"><b>${esc(k)}</b> ${esc(v)} <small>${esc(src)}</small></p>`).join("")}
-        ${c.pages.length ? `<div class="wk-k">Pages</div><div class="wk-thumbs">${c.pages.map((pg, i) => `<figure data-wpage="${esc(c.id)}|${i}">${pg.shot ? `<img src="./data/${esc(pg.shot)}" alt="" />` : `<div class="down">down</div>`}<figcaption>${esc(pg.name)}</figcaption></figure>`).join("")}</div>` : ""}
+        ${isTraced(c) ? nums([[c.pages.filter((x) => x.kind !== "film").length, "sites & pages"], [c.pages.filter((x) => x.kind === "film").length, "films"], [c.also.length, "other repos"]])
+          : nums([[c.touches.reduce((a, [, n]) => a + n, 0), `files touched · ${W.windowDays}d`], [c.lastTouched ? ago(c.lastTouched, now()) : "—", "last touch"], [c.prs.filter((x) => x.state === "OPEN").length, "open PRs"], [c.pages.length ? `${up}/${c.pages.length}` : "—", "pages up"]])}
+        ${isTraced(c) ? "" : spark(c.touches)}<p>${ci(c.repos)}</p>${c.metrics.map(([k, v, src]) => `<p class="wk-m"><b>${esc(k)}</b> ${esc(v)} <small>${esc(src)}</small></p>`).join("")}
+        ${c.pages.length ? `<div class="wk-k">Pages</div><div class="wk-thumbs">${c.pages.map((pg, i) => `<figure data-wpage="${esc(c.id)}|${i}">${pg.shot ? `<img src="./data/${esc(pg.shot)}" alt="" />` : listed(pg) ? `<div class="down">${KIND[pg.kind] ?? "PAGE"}</div>` : `<div class="down">down</div>`}<figcaption>${esc(pg.name)}</figcaption></figure>`).join("")}</div>` : ""}
         ${prList(c.prs)}${thumbs(extras(c.id), c.id)}${asks(c)}`);
     } else {
       const p = P.get(id.replace(/>linked$/, "")); if (!p) return;
@@ -292,7 +321,7 @@ export async function mountWork(A, { bm, fly, start = "" }) {
       show(`<div class="lb-line"><span>Your work</span><span>${esc(p.name)}</span>${p.role ? `<span>${esc(p.role)}</span>` : ""}</div>
         <h3>${esc(p.name)}</h3><p>${pill(p.status)}</p>${p.verdict ? `<p class="wk-why">${esc(p.verdict.text)} <small>from ${esc(p.verdict.source)}</small></p>` : ""}
         ${left != null ? `<p class="wk-why"><b>${left > 0 ? `${Math.floor(left / 3600)}h left` : "Deadline passed"}</b> · ${esc(p.deadlineLabel ?? p.deadline)}</p>` : ""}
-        ${nums(p.metrics.slice(0, 8).map(([k, v, src]) => [v, `${k}${src === "live" ? "" : " · " + src}`]))}${spark(p.touches)}
+        ${nums(p.metrics.slice(0, 8).map(([k, v, src]) => [v, `${k}${src === "live" ? "" : " · " + src}`]))}${isTraced(p) ? "" : spark(p.touches)}
         <p>${ci(p.repos.map((r) => r.id))}</p>${p.repos.map((r) => `<p class="wk-m"><b>${esc(r.id)}</b> ${r.ok ? `${esc(r.head)} · ${esc(r.headMsg)} <small>${ago(r.headAt, now())} ago · ${r.commits} commits in ${W.windowDays}d</small>` : `<em>${esc(r.why)}</em>`}</p>`).join("")}
         ${p.notes ? ["open", "risks", "done"].filter((k) => p.notes[k].length).map((k) => `<div class="wk-k">${k} <small>from ${esc(p.notes.source)}</small></div><ul class="wk-notes">${p.notes[k].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") : ""}
         ${p.links.length ? `<p class="wk-links">${p.links.map(([k, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(k)} ↗</a>`).join("")}</p>` : ""}
@@ -307,8 +336,9 @@ export async function mountWork(A, { bm, fly, start = "" }) {
   function openPage(c, i) {
     const pg = c.pages[i];
     show(`<div class="lb-line"><span>${esc(P.get(c.product).name)}</span><span>${esc(c.name)}</span><span>page</span></div>
-      ${pg.shot ? `<img class="hero wk-hero" src="./data/${esc(pg.shot)}" alt="" />` : `<div class="down hero">down · ${esc(pg.code)}</div>`}
-      <h3>${esc(pg.name)}</h3><p class="wk-src${stale({ checked: pg.checked, window: 86400 }) ? " stale" : ""}">${pg.shot ? "screenshot" : "no answer"} · ${esc(fresh({ checked: pg.checked, window: 86400 }))}</p>
+      ${pg.shot ? `<img class="hero wk-hero" src="./data/${esc(pg.shot)}" alt="" />` : listed(pg) ? "" : `<div class="down hero">down · ${esc(pg.code)}</div>`}
+      <h3>${esc(pg.name)}</h3>${listed(pg) ? `<p class="wk-src">${esc(KIND[pg.kind] ?? "PAGE")} · from the trace, not screenshotted</p>${pg.title && pg.title !== pg.name ? `<p class="wk-why">${esc(pg.title)}</p>` : ""}${pg.evidence ? `<p class="wk-m"><b>evidence</b> ${esc(pg.evidence)}</p>` : ""}`
+        : `<p class="wk-src${stale({ checked: pg.checked, window: 86400 }) ? " stale" : ""}">${pg.shot ? "screenshot" : "no answer"} · ${esc(fresh({ checked: pg.checked, window: 86400 }))}</p>`}
       <div class="lb-act">${pg.url ? `<a class="primary" href="${esc(pg.url)}" target="_blank" rel="noopener">Open page ↗</a>` : `<span class="wk-src">from the repo: ${esc(pg.file)}</span>`}<button data-wproof="${esc(c.id)}">${esc(c.name)} proof</button></div>`);
   }
   const close = () => { box.classList.remove("on"); box.innerHTML = ""; };

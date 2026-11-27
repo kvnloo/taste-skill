@@ -194,6 +194,23 @@ with Playwright; the rest are listed as down. A missing repo or gh makes that pa
   ci: { "<owner/repo>": { conclusion, t, url } }, repos, unmapped, errors }
 ```
 
+**From an entity trace.** A traced graph of one repository (`{nodes, edges}`: repos, businesses, the sites, pages
+and videos made for them, and lineage edges such as `reuses`, `descends_from` and `implements`, each with evidence)
+opens in the same repo map and project lens, without git or gh:
+
+```sh
+node scripts/entities.mjs trace.graph.json [--root repo:<name>] [--id <product>] [--out <dataDir>] [--merge] [--dry]
+ATLAS_DATA=<dataDir> node scripts/board.mjs serve --port 8790   # then /#work:<product> and /#project:<product>
+```
+
+The repo becomes a product and each business with a site, page or film becomes a component whose tiles are those
+items (labelled SITE / PAGE / ▶ FILM cards until a node carries a `shot`). Items several businesses share and nothing
+else gather under their site. Lineage that leaves the repo becomes parts of the other repos' products: shared back
+into this one as portals, listed as "also in <repo>" on the business, and in the lens's **Built on** list. Opening the
+product greys the two repos it shares the most with. Lineage inside the repo (a film copied from another business's)
+shows as "built from". `--merge` replaces only these products in an existing `work.atlas.json`.
+`node --test scripts/entities.test.mjs` covers it on a synthetic graph.
+
 `weight` is the decayed touch weight at `generatedAt`; `touches` are raw so a consumer can re-weigh at any
 "as of" and half-life (`weightAt` in `src/pack.js`). Status from the board seed is labelled with its source and
 only used while fresh (24 h); after that the live rule takes over. `node --test scripts/work.test.mjs` covers

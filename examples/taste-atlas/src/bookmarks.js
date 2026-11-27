@@ -5,6 +5,7 @@
 // current focus (filterable by subject), "recorded examples" on the lineage card, and a detail view.
 import { TECHNIQUES, opById, lineage, MODE } from "./taxonomy.js";
 import { viewOf, setView } from "./nav.js";
+import { swipe, haptic } from "./deck.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const SUBJECT_NAMES = { "3d-webgl": "3D / WebGL", "ui-product": "UI", "motion-design": "Motion", "generative-art": "Generative", illustration: "Illustration", "photo-film": "Photo / film", "type-brand": "Type / brand", "ai-dev-tools": "AI tools", "hardware-robotics": "Hardware" };
@@ -345,7 +346,15 @@ export async function mountBookmarks(A, { go, fly }) {
   // Detail view: the post large, its lineage, and the way out to X.
   const box = document.createElement("div"); box.className = "lightbox"; document.body.appendChild(box);
   // The newest board, so any post can be sent straight onto the brainstorm in progress.
-  let board = null, current = null;
+  let board = null, current = null, queue = [];
+  // The list a post was opened from is its queue, like a music-app page: prev / next, arrow keys and a sideways
+  // swipe walk it without closing the viewer.
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest?.("[data-post], [data-cpost]"); if (!el || box.contains(el)) return;
+    const root = el.closest(".grid, .ex-row, .ctxpane, .pj-ctx") ?? el.parentElement;
+    queue = [...root.querySelectorAll("[data-post], [data-cpost]")].map((x) => x.dataset.post ?? x.dataset.cpost);
+  }, true);
+  const stepPost = (d) => { const i = queue.indexOf(current?.id), j = i + d; if (i < 0 || j < 0 || j >= queue.length) { haptic("edge"); return; } haptic(); detail(byId.get(queue[j])); };
   fetch("/api/boards", { cache: "no-store" }).then((r) => (r.ok ? r.json() : [])).then((l) => { board = l[0] ?? null; }).catch((e) => console.error("boards:", e));
   function detail(b) {
     if (!b) return;
@@ -370,6 +379,8 @@ export async function mountBookmarks(A, { go, fly }) {
       ${body}${stats}<div class="lb-meta">${src ? `${LAYERS[b.layer]} · ` : ""}${OWN.has(b.layer) || NAMED.has(b.layer) ? esc(b.author) : "@" + esc(b.author)} · ${esc(b.date ?? "")}${b.seen ? ` · ${esc(b.seen)}` : ""}${also ? ` · also <a href="#${also.id}" data-go="${also.id}">${esc(also.name)}</a>` : ""}</div>
       <div class="lb-act">${open ? `<a class="primary" href="${esc(b.url)}" target="_blank" rel="noopener">${open}</a>` : ""}${t ? `<button data-go="${t.id}">Go to ${esc(t.name)}</button>` : ""}${board && b.url ? `<button data-board="${esc(board.id)}" title="Add to the board: ${esc(board.title)}">+ Board: ${esc(board.title.slice(0, 28))}</button>` : ""}</div></div></div>`;
     box.querySelector(".lb-body").insertAdjacentHTML("beforeend", A.postExtra?.(b) ?? "");
+    const qi = queue.indexOf(b.id);
+    if (qi >= 0 && queue.length > 1) box.querySelector(".lb-card").insertAdjacentHTML("afterbegin", `<nav class="lb-q" aria-label="Posts in this list"><button data-lbstep="-1"${qi ? "" : " disabled"} aria-label="Previous">‹</button><span>${qi + 1} / ${queue.length}</span><button data-lbstep="1"${qi < queue.length - 1 ? "" : " disabled"} aria-label="Next">›</button></nav>`);
     box.classList.add("on");
     const img = box.querySelector("img.hero");
     if (img && orig) { const hi = new Image(); hi.decoding = "async"; hi.src = "./data/" + orig; hi.decode().then(() => { if (current === b) img.src = hi.src; }, (e) => console.error("full-res:", orig, e.message)); }
@@ -380,7 +391,15 @@ export async function mountBookmarks(A, { go, fly }) {
     }
   }
   const close = () => { box.querySelector("video")?.pause(); box.classList.remove("on"); box.innerHTML = ""; };
+  let sx = null, sy = 0, dragged = false;
+  box.addEventListener("pointerdown", (e) => { dragged = false; sx = e.target.closest("input, textarea, select") ? null : e.clientX; sy = e.clientY; });
+  // Resolve on pointerup, or on the click when Chrome drops the pointerup after a re-render (seen on phone viewports).
+  const endSwipe = (e) => { if (sx == null) return; const dx = e.clientX - sx, dy = e.clientY - sy, d = swipe(dx, dy); sx = null; dragged = Math.hypot(dx, dy) > 8; if (d) stepPost(d); };
+  box.addEventListener("pointerup", endSwipe);
   box.addEventListener("click", (e) => {
+    endSwipe(e);
+    if (dragged) { dragged = false; e.preventDefault(); return; } // a swipe ends with a click (backdrop or a link); it must not act
+    const st = e.target.closest("[data-lbstep]"); if (st) return stepPost(+st.dataset.lbstep);
     const g = e.target.closest("[data-go]")?.dataset.go;
     if (g) { e.preventDefault(); close(); go(g); return; }
     const bt = e.target.closest("[data-board]");
@@ -394,7 +413,11 @@ export async function mountBookmarks(A, { go, fly }) {
     }
     if (e.target === box || e.target.closest(".lb-x")) close();
   });
-  addEventListener("keydown", (e) => { if (e.key === "Escape" && box.classList.contains("on")) { close(); e.stopImmediatePropagation(); } }, true);
+  addEventListener("keydown", (e) => {
+    if (!box.classList.contains("on")) return;
+    if (e.key === "Escape") { close(); e.stopImmediatePropagation(); }
+    else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && !/INPUT|TEXTAREA/.test(e.target.tagName)) { e.preventDefault(); e.stopImmediatePropagation(); stepPost(e.key === "ArrowRight" ? 1 : -1); }
+  }, true);
 
   // Lineage card: "N recorded examples" strip for the focused technique/specimen.
   A.view.cardExtra = (f) => {

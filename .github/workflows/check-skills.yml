@@ -31,3 +31,31 @@ jobs:
               execFileSync(process.execPath, ["--check", f], { stdio: "inherit" });
             }
           '
+
+  atlas:
+    name: Taste atlas parses and tests pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: examples/taste-atlas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every atlas module parses (node --check)
+        shell: bash
+        run: |
+          set -euo pipefail
+          n=0
+          while IFS= read -r -d '' f; do
+            node --check "$f"; n=$((n+1))
+          done < <(find src scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
+          echo "node --check: $n files ok"
+      - name: Atlas unit tests (node --test)
+        run: node --test scripts/*.test.mjs

@@ -163,6 +163,11 @@ board server) and the post is tethered from its tile on the ring to the componen
 out. Search finds products and components; `/#work:glide/taste` deep-links one; the shelf lists its pages and
 linked posts; the Layers bar has a **Work** toggle.
 
+A project with a storyboard reads like a deck. A player bar floats over the canvas (bottom left; under the search
+bar on phones): **‹ Prev · 03 / 15 · Next ›**, and the arrow keys or PageUp/PageDown do the same. Tap the open
+slide (on the canvas or its picture in the shelf) for a full-screen viewer: swipe sideways, use the arrows or the
+edge buttons, Esc closes. Every step vibrates briefly where the phone supports it (the Sound Atlas haptic pattern).
+
 ```sh
 node scripts/work.mjs [--dry] [--no-shots] [--no-gh]   # writes data/work.atlas.json (+ data/work-shots/)
 ```

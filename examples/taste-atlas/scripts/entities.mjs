@@ -19,7 +19,7 @@
 //   lineage inside the repo        → the component's "built from" metric (e.g. a film copied from another group's)
 // Node fields read: id, type, label, repo ("owner/name@ref"), url, path, shot (optional image under data/), status
 // (optional {value, why}). Edge fields: from, to, type, evidence. Unknown node ids in edges are skipped.
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -165,7 +165,8 @@ export function mergeWork(base, add) {
   return { ...base, products: [...base.products.filter((p) => !ids.has(p.id)), ...add.products], components: [...base.components.filter((c) => !cids.has(c.id)), ...add.components] };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpath: run through a symlinked path, argv[1] is the link while import.meta.url is the target (the CLI did nothing).
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
   const a = process.argv.slice(2), opt = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
   const file = a.find((x, i) => !x.startsWith("--") && !["--root", "--id", "--out"].includes(a[i - 1]));
   if (!file) { console.error("usage: node scripts/entities.mjs <graph.json> [--root <nodeId>] [--id <productId>] [--out <dataDir>] [--merge] [--dry]"); process.exit(2); }

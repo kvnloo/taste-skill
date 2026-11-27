@@ -1,7 +1,7 @@
 // node --test scripts/entities.test.mjs — entity graph → Work layer, on a tiny synthetic graph (no real data).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, symlinkSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -123,4 +123,9 @@ test("mergeWork replaces same ids and keeps the rest; the CLI writes data/work.a
   execFileSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "entities.mjs"), f, "--out", dir], { encoding: "utf8" });
   const w = JSON.parse(readFileSync(join(dir, "work.atlas.json"), "utf8"));
   assert.deepEqual(w.products.map((p) => p.id), W.products.map((p) => p.id));
+  // Run through a symlink (a checkout under a linked scratch dir): the CLI used to see itself as imported and do nothing.
+  const link = join(dir, "link.mjs"), out2 = join(dir, "via-link");
+  symlinkSync(join(dirname(fileURLToPath(import.meta.url)), "entities.mjs"), link);
+  execFileSync(process.execPath, [link, f, "--out", out2], { encoding: "utf8" });
+  assert.ok(existsSync(join(out2, "work.atlas.json")), "CLI ran through a symlinked path");
 });

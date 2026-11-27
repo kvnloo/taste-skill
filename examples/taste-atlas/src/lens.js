@@ -47,6 +47,11 @@ export async function mountLens(A, { bm, fly }) {
 
     const prs = comps.flatMap((c) => c.prs ?? []).filter((x, i, a) => a.findIndex((y) => y.url === x.url) === i).sort((a, b) => (a.state === "OPEN") - (b.state === "OPEN") || b.t - a.t).reverse();
     const asks = [...(p.asks ?? []), ...comps.flatMap((c) => c.asks ?? [])].filter((x, i, a) => a.findIndex((y) => y.text === x.text) === i).sort((a, b) => b.t - a.t);
+    const byId = new Map(W.components.map((c) => [c.id, c])), up = new Map();
+    for (const id of p.portals ?? []) { const c = byId.get(id); if (c && c.product !== cur) (up.get(c.product) ?? up.set(c.product, []).get(c.product)).push(c.name); }
+    for (const c of comps) for (const q of c.also ?? []) if (q !== cur && !up.has(q)) up.set(q, []);
+    const users = (q) => comps.filter((c) => c.also?.includes(q)).length;
+    const builtOn = [...up].map(([q, parts]) => [q, parts.length ? parts : [`in ${users(q)} of its parts`]]).sort((a, b) => users(b[0]) - users(a[0]));
     const st = p.live ?? p.status;
     const sec = (title, n, body) => (n ? `<section class="pj-ctx ln"><h4>${title} <small>${n}</small></h4>${body}</section>` : "");
     const phases = J ? J.phases.map((ph) => [ph, J.screens.filter((s) => s.phase === ph.id)]).filter(([, l]) => l.length) : [];
@@ -56,8 +61,11 @@ export async function mountLens(A, { bm, fly }) {
         ${p.deadlineLabel ? `<p><small>Due</small> ${esc(p.deadlineLabel)}</p>` : ""}
         ${p.metrics?.length ? `<div class="ln-metrics">${p.metrics.map(([k, v]) => `<span><b>${esc(v)}</b>${esc(k)}</span>`).join("")}</div>` : ""}</section>`,
       sec("User journey", J?.screens.length, `<a class="ln-open" href="#work:${esc(cur)}">Open the storyboard →</a><div class="ln-phases">${phases.map(([ph, l]) => `<div><small>${esc(ph.name)}</small><div class="ln-shots">${l.map((s) => `<a href="#work:${esc(cur)}@${esc(s.id)}" title="${esc(s.name)}">${s.shot ? `<img loading="lazy" src="${esc(src(s.shot))}" alt="" />` : ""}<span>${esc(s.name)}</span></a>`).join("")}</div></div>`).join("")}</div>`),
-      sec("Repos", p.repos?.length, `<ul class="ln-list">${(p.repos ?? []).map((r) => { const ci = W.ci?.[r.gh]; return `<li><a href="https://github.com/${esc(r.gh)}" target="_blank" rel="noopener"><b>${esc(r.gh)}</b></a> ${ci ? `<a href="${esc(ci.url)}" target="_blank" rel="noopener"><em class="st-${ci.conclusion === "success" ? "ok" : "at-risk"}">CI ${esc(ci.conclusion ?? "?")}</em></a>` : ""}<small>${esc(r.head ?? "")} · ${esc(r.headMsg ?? "")} · ${r.headAt ? ago(r.headAt) : ""}</small></li>`; }).join("")}</ul>`),
+      sec("Repos", p.repos?.length, `<ul class="ln-list">${(p.repos ?? []).map((r) => { const ci = W.ci?.[r.gh]; return `<li><a href="https://github.com/${esc(r.gh)}" target="_blank" rel="noopener"><b>${esc(r.gh)}</b></a> ${ci ? `<a href="${esc(ci.url)}" target="_blank" rel="noopener"><em class="st-${ci.conclusion === "success" ? "ok" : "at-risk"}">CI ${esc(ci.conclusion ?? "?")}</em></a>` : ""}<small>${r.ok === false && r.why ? esc(r.why) : `${esc(r.head ?? "")} · ${esc(r.headMsg ?? "")} · ${r.headAt ? ago(r.headAt) : ""}`}</small></li>`; }).join("")}</ul>`),
       sec("Pull requests", prs.length, `<ul class="ln-list">${prs.slice(0, 8).map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">#${x.number} ${esc(x.title)}</a><small>${esc(x.state.toLowerCase())}${x.draft ? " · draft" : ""} · ${x.checks ? `${x.checks.pass}✓ ${x.checks.fail ? x.checks.fail + "✗" : ""}` : ""} · ${ago(x.t)}</small></li>`).join("")}</ul>`),
+      // Built on: the outside parts this project uses (its portals) and the repos its own parts are also in, so the
+      // lens shows where its work comes from (e.g. a plugin or film it reuses) and one tap opens that repo's map.
+      sec("Built on", builtOn.length, `<div class="ln-chips">${builtOn.map(([q, parts]) => `<a href="#work:${esc(q)}" title="${esc(parts.join(", "))}">${esc(products.get(q)?.name ?? q)}<small>${esc(parts.slice(0, 3).join(" · "))}${parts.length > 3 ? ` +${parts.length - 3}` : ""}</small></a>`).join("")}</div>`),
       sec("Components", comps.length, `<div class="ln-chips">${comps.map((c) => `<a href="#work:${esc(c.id)}" class="${esc(c.status?.value ?? "")}" title="${esc(c.status?.why ?? "")}">${esc(c.name)}<small>${c.prs?.length ?? 0} PR · ${c.lastTouched ? ago(c.lastTouched) : "—"}</small></a>`).join("")}</div>`),
       p.notes ? ["open", "risks"].map((k) => sec(k === "open" ? "Open" : "Risks", p.notes[k]?.length, `<ul class="ln-list">${p.notes[k].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`)).join("") : "",
       sec("Inspiration", posts.size + cards.length, `<small>${posts.size} of your saved posts are lit on the atlas; the rest are web references.</small><div class="ln-cards">${cards.slice(0, 24).map((r) => `<a href="${esc(r.url ?? "#")}" target="_blank" rel="noopener" title="${esc(r.title)}">${r.image ? `<img loading="lazy" src="${esc(r.image.startsWith("http") || r.image.startsWith("/") ? r.image : `/s/${r.board}/${r.image}`)}" alt="" />` : `<div class="txt">${esc(r.title)}</div>`}<span>${esc(r.text || r.title)}</span></a>`).join("")}</div>`),
@@ -67,7 +75,7 @@ export async function mountLens(A, { bm, fly }) {
     // On its own atlas everything on the canvas is the project's context: nothing greys out, the shelf lists the skills.
     if (p.atlas) { const own = bm.items.filter((b) => b.layer === "skill").sort((a, b) => (b.score ?? 0) - (a.score ?? 0)); return bm.setCustom({ title: p.name, kind: "PROJECT", ids: null, items: own, n: own.length, html }); }
     // Header count: what the panel holds. A bare "0" read as "nothing here" on projects with screens but no linked posts.
-    const refs = posts.size + cards.length, nScreens = J?.screens.length ?? 0, n = [nScreens && `${nScreens} screens`, refs && `${refs} refs`].filter(Boolean).join(" · ") || "0";
+    const refs = posts.size + cards.length, nScreens = J?.screens.length ?? 0, n = [nScreens && `${nScreens} screens`, refs && `${refs} refs`].filter(Boolean).join(" · ") || (comps.length ? `${comps.length} parts` : "0");
     const box = bm.setCustom({ title: p.name, kind: "PROJECT", ids: new Set(posts.keys()), near, items: [...posts.values()], n, html, pack: true });
     const ts = [...posts.keys(), ...near].map((i) => bm.tileOf(i)).filter(Boolean);
     // After the shelf's .25s width transition, so the fit sees the final free area. (The else branch used to sit inside

@@ -43,7 +43,8 @@ import { plan, fit, picksFromScene, toJsonCanvas, parseImport, rehydrate, reconc
 
 const here = dirname(fileURLToPath(import.meta.url)), app = join(here, "..");
 const HOME = process.env.TASTE_BOARD_HOME ?? join(homedir(), ".cache/taste-board");
-const PORT = +(process.env.TASTE_BOARD_PORT ?? 8789), LOCAL = `http://127.0.0.1:${PORT}`;
+// `serve --port N` (documented above) wins over $TASTE_BOARD_PORT; it used to be ignored, so every serve took 8789.
+const portArg = process.argv.indexOf("--port"), PORT = +((portArg > 2 ? process.argv[portArg + 1] : null) ?? process.env.TASTE_BOARD_PORT ?? 8789), LOCAL = `http://127.0.0.1:${PORT}`;
 const BASE = (process.env.TASTE_BOARD_URL ?? LOCAL).replace(/\/$/, "");
 const DATA = process.env.ATLAS_DATA ?? join(app, "data");
 const MCP = process.env.TASTE_SEARCH_MCP ?? "https://mcp.exa.ai/mcp", READER = process.env.TASTE_READER ?? "https://r.jina.ai/";
@@ -273,10 +274,12 @@ function serve() {
       }); return;
     }
     if (u.pathname === "/atlas" || u.pathname === "/atlas/" || u.pathname === "/atlas/index.html") { res.writeHead(301, { location: "/" + u.search }).end(); return; }
-    if (u.pathname.startsWith("/atlas/")) { const f = inside(app, u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }
+    // /data/* is $ATLAS_DATA (default <app>/data), so a data dir outside the checkout renders too.
+    const staticFile = (p) => (p.startsWith("/data/") ? inside(DATA, p.slice(5)) : inside(app, p));
+    if (u.pathname.startsWith("/atlas/")) { const f = staticFile(u.pathname.slice(6)); return f ? file(res, f) : res.writeHead(403).end(); }
     // Optional data layers a fresh install has not imported yet answer null (the app treats null as absent), not 404.
-    if (/^\/data\/[a-z]+\.atlas\.json$/.test(u.pathname) && !existsSync(join(app, u.pathname))) { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end("null"); return; }
-    if (!m) { const f = inside(app, u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }
+    if (/^\/data\/[a-z]+\.atlas\.json$/.test(u.pathname) && !existsSync(join(DATA, u.pathname.slice(5)))) { res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end("null"); return; }
+    if (!m) { const f = staticFile(u.pathname); return f && !u.pathname.startsWith("/s/") ? file(res, f) : res.writeHead(404).end("not found"); }
     const d = join(HOME, m[1]), sub = m[2] ?? "/";
     if (!existsSync(join(d, "board.json"))) { res.writeHead(404, { "content-type": "text/plain" }).end(`No board ${m[1]}. Start one: board.mjs start`); return; }
     if (sub === "/") return file(res, join(app, "board.html"));
